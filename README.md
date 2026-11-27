@@ -5,7 +5,7 @@
 
 ---
 
-**Qualification du 27 novembre 2026.** La version corrigée se compile localement. Les appels réels France Travail, Gemini et Gmail, l’extension installée et le déploiement Vercel restent à qualifier. Le [rapport](FINAL_REPORT.md) et la [matrice](docs/COMPLIANCE_MATRIX.md) détaillent les preuves.
+**Qualification du 27 novembre 2026.** La démonstration publique fonctionne sur Vercel avec des données fictives. La CI a validé le build, 31 tests et les sept écrans sur Chrome desktop et mobile. Vercel est connecté à PostgreSQL sur Neon. Les appels réels France Travail, Gemini et Gmail, ainsi que l’extraction réelle des quatre job boards, sont à qualifier. [Démo Vercel](https://job-hunter-agent-for-fabien-lufbery.vercel.app) · [Journal CI](https://github.com/fabienlufbery-hue/job-hunter-agent-for-fabien-lufbery/actions/runs/45974284800) · [Rapport](FINAL_REPORT.md) · [Matrice](docs/COMPLIANCE_MATRIX.md)
 
 ## 1. Objectif du projet
 
@@ -138,7 +138,7 @@ Voir le guide complet étape par étape dans [docs/SETUP.md](docs/SETUP.md).
 
 - **Serveur.** Le workflow [Daily Job Sync](.github/workflows/daily-job-sync.yml) est défini à **09h00 et 18h00 Europe/Paris** avec la gestion du changement d’heure par GitHub Actions. La route associe un seul lancement à chaque créneau, et le traitement peut reprendre les offres importées par le navigateur et encore à évaluer.
 - **Chrome.** L’extension tente la collecte sur les onglets déjà ouverts des plateformes autorisées. En cas de vérification, elle laisse le navigateur dans son état et signale l’action nécessaire. L’import assisté accepte les informations saisies et l’URL originale.
-- **Configuration et preuve.** Les étapes Vercel, Neon, Gmail et GitHub Actions sont dans le [guide](docs/SETUP.md). Les 10 images versionnées illustrent l’interface avant cette reprise.
+- **Configuration et preuve.** Les étapes Vercel, Neon, Gmail et GitHub Actions sont dans le [guide](docs/SETUP.md). Les 10 images versionnées illustrent l’interface avant cette reprise. Les 18 captures desktop et mobile du build corrigé sont liées à l’exécution CI.
 
 ## 7. Déploiement Vercel
 
