@@ -264,9 +264,9 @@ export default function MyCvPage() {
       <div className="flex items-start gap-2.5 rounded-xl border border-indigo-400/25 bg-indigo-500/10 p-3.5 text-xs text-indigo-100">
         <ShieldAlert className="h-4 w-4 text-cyan-300 shrink-0 mt-0.5" />
         <span>
-          <strong>Politique zéro hallucination &amp; confidentialité :</strong> Le système n’invente
-          jamais de diplôme, d’expérience, de certification ou de compétence. Lorsque Gemini est
-          activé, le texte du CV est envoyé côté serveur uniquement pour l’extraction et le scoring.
+          <strong>Confidentialité du CV.</strong> Si Gemini est configuré, le serveur lui transmet le
+          texte à structurer après masquage des coordonnées détectées localement. Relisez les champs
+          extraits avant de scorer une offre ou de générer une candidature.
         </span>
       </div>
 
