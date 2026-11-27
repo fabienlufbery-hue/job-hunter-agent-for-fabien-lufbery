@@ -24,6 +24,7 @@ import {
   ScoreBadge,
   SectionHeader,
   Select,
+  Textarea,
 } from '@/components/ui/primitives';
 import { formatFrDateShort, PLATFORM_DISPLAY } from '@/lib/utils';
 
@@ -77,6 +78,33 @@ export default function JobMatchesPage() {
   const [minScore, setMinScore] = useState('0');
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [sortBy, setSortBy] = useState('score');
+
+  const [showWttjImport, setShowWttjImport] = useState(false);
+
+  async function importWttj(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const values = Object.fromEntries(new FormData(form));
+    setBusyAction('wttj-import');
+    setFeedback(null);
+    try {
+      const res = await fetch('/api/jobs/import/wttj', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(values),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Échec de l’enregistrement');
+      setFeedback({ kind: 'ok', text: data.inserted ? 'Offre Welcome to the Jungle enregistrée.' : 'Référence déjà enregistrée ; doublon évité.' });
+      form.reset();
+      setShowWttjImport(false);
+      await loadJobs();
+    } catch (err) {
+      setFeedback({ kind: 'err', text: err instanceof Error ? err.message : 'Erreur réseau' });
+    } finally {
+      setBusyAction(null);
+    }
+  }
 
   // France Travail manual sync modal
   const [showFtSync, setShowFtSync] = useState(false);
@@ -227,6 +255,9 @@ export default function JobMatchesPage() {
               <RefreshCw className="h-3.5 w-3.5" />
               Recherche France Travail API
             </Button>
+            <Button variant="secondary" size="sm" onClick={() => setShowWttjImport(v => !v)} disabled={loading || isDemo}>
+              Enregistrer une offre WTTJ
+            </Button>
             <Button variant="secondary" size="sm" onClick={() => void loadJobs()} disabled={loading}>
               Actualiser
             </Button>
@@ -249,6 +280,42 @@ export default function JobMatchesPage() {
           )}
           <span>{feedback.text}</span>
         </div>
+      )}
+
+      {showWttjImport && !isDemo && (
+        <GlassCard className="space-y-3 border-cyan-400/25">
+          <h2 className="text-sm font-semibold text-white">Welcome to the Jungle — import assisté</h2>
+          <p className="text-xs text-slate-400">
+            Consultez les offres sur le site original puis renseignez le lien et vos propres notes.
+            Aucune connexion au compte WTTJ ni extraction automatisée.
+          </p>
+          <a href="https://www.welcometothejungle.com/fr/jobs" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sm text-cyan-300 hover:underline">
+            Rechercher sur Welcome to the Jungle <ExternalLink className="h-3 w-3" />
+          </a>
+          <form onSubmit={importWttj} className="grid gap-3 sm:grid-cols-2">
+            <label className="space-y-1 text-xs text-slate-300 sm:col-span-2">Lien de la fiche de poste
+              <Input name="originalUrl" type="url" required maxLength={4096} placeholder="https://www.welcometothejungle.com/fr/companies/…/jobs/…" />
+            </label>
+            <label className="space-y-1 text-xs text-slate-300">Intitulé du poste
+              <Input name="title" required minLength={2} maxLength={300} />
+            </label>
+            <label className="space-y-1 text-xs text-slate-300">Entreprise
+              <Input name="company" maxLength={200} />
+            </label>
+            <label className="space-y-1 text-xs text-slate-300">Localisation
+              <Input name="location" maxLength={200} />
+            </label>
+            <label className="space-y-1 text-xs text-slate-300">Contrat
+              <Input name="contractType" maxLength={100} />
+            </label>
+            <label className="space-y-1 text-xs text-slate-300 sm:col-span-2">Vos notes sur le poste (missions et compétences résumées)
+              <Textarea name="description" rows={4} maxLength={4000} />
+            </label>
+            <Button type="submit" disabled={busyAction !== null}>
+              {busyAction === 'wttj-import' ? 'Enregistrement...' : 'Enregistrer la référence'}
+            </Button>
+          </form>
+        </GlassCard>
       )}
 
       {showFtSync && (
