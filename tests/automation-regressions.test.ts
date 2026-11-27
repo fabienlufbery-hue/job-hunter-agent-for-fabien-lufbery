@@ -22,8 +22,8 @@ describe('Scheduled collection', () => {
   it('claims a Paris slot once and records a failed provider run as a failure', async () => {
     await resetTestDatabase();
     vi.stubEnv('CRON_SECRET', 'test-only-secret');
-    vi.stubEnv('FRANCE_TRAVAIL_CLIENT_ID', '');
-    vi.stubEnv('FRANCE_TRAVAIL_CLIENT_SECRET', '');
+    vi.stubEnv('APIFY_API_TOKEN', '');
+    vi.stubEnv('APIFY_TASK_ID', '');
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-11-27T08:02:00Z'));
     const makeRequest = () => new Request('http://localhost:3000/api/cron/sync', {

@@ -28,7 +28,6 @@ export default function SettingsPage() {
     isDemo: boolean;
     geminiModelActive: string;
     geminiDeprecationNote: string;
-    franceTravailAppName: string;
     scoringRubric: { scale: string; weights: Record<string, string> };
   } | null>(null);
 
@@ -50,15 +49,15 @@ export default function SettingsPage() {
       .catch(() => {});
   }, []);
 
-  async function testFranceTravail() {
+  async function testApify() {
     setFtTesting(true);
     setFtResult(null);
     try {
-      const res = await fetch('/api/integrations/france-travail/test', { method: 'POST' });
+      const res = await fetch('/api/integrations/apify/test', { method: 'POST' });
       const data = await res.json();
       setFtResult(data);
     } catch {
-      setFtResult({ connected: false, error: 'Erreur réseau lors du test France Travail.' });
+      setFtResult({ connected: false, error: 'Erreur réseau lors du test Apify.' });
     } finally {
       setFtTesting(false);
     }
@@ -82,40 +81,27 @@ export default function SettingsPage() {
     <div className="space-y-6">
       <SectionHeader
         title="Settings — Configuration & Tests réels"
-        subtitle="Testez les connexions réelles aux API France Travail et Google Gemini, et consultez la politique de sécurité."
+        subtitle="Testez les connexions réelles aux API Apify et Google Gemini, et consultez la politique de sécurité."
       />
 
       <div className="grid gap-5 lg:grid-cols-2">
-        {/* France Travail Connection Test */}
+        {/* Apify Connection Test */}
         <GlassCard className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Building2 className="h-4 w-4 text-cyan-300" />
-              <h2 className="text-base font-semibold text-white">API France Travail Offres v2</h2>
+              <h2 className="text-base font-semibold text-white">Apify API</h2>
             </div>
-            <Badge variant="info">OAuth2 Client Credentials</Badge>
+            <Badge variant="info">API Token</Badge>
           </div>
 
-          <div className="text-xs text-slate-300 space-y-1">
-            <p>
-              <strong>Nom d’application :</strong>{' '}
-              {meta?.franceTravailAppName || 'Job Hunter Agent - Fabien Lufbery'}
-            </p>
-            <p className="text-slate-400">
-              Variables serveur : <code className="font-mono">FRANCE_TRAVAIL_CLIENT_ID</code>,{' '}
-              <code className="font-mono">FRANCE_TRAVAIL_CLIENT_SECRET</code>
-            </p>
-            <p className="text-slate-400">
-              Scope : <code className="font-mono">api_offresdemploiv2 o2dsoffre</code>
-            </p>
-          </div>
-
+          <p className="text-xs text-slate-300">Configurez APIFY_API_TOKEN et APIFY_TASK_ID dans Vercel. La tâche doit avoir un dataset réussi et autorisé.</p>
           <Button
-            onClick={testFranceTravail}
+            onClick={testApify}
             disabled={ftTesting || Boolean(meta?.isDemo)}
             className="w-full"
           >
-            {ftTesting ? 'Test OAuth2 & recherche en cours...' : 'Tester la connexion France Travail'}
+            {ftTesting ? 'Test Apify en cours...' : 'Tester la connexion Apify'}
           </Button>
 
           {ftResult && (
@@ -134,14 +120,13 @@ export default function SettingsPage() {
                 )}
                 <span>
                   {ftResult.connected
-                    ? 'Connexion France Travail vérifiée avec succès'
-                    : 'Échec de connexion France Travail'}
+                    ? 'Connexion Apify vérifiée avec succès'
+                    : 'Échec de connexion Apify'}
                 </span>
               </div>
               {ftResult.connected ? (
                 <>
-                  <p>Latence : {ftResult.latencyMs} ms · TTL Token : {ftResult.tokenExpiresIn}s</p>
-                  <p>Offres accessibles sur l’API : {ftResult.totalAvailableOffers?.toLocaleString('fr-FR')}</p>
+                  <p>Latence : {ftResult.latencyMs} ms</p>
                 </>
               ) : (
                 <p>{ftResult.error}</p>
@@ -227,25 +212,14 @@ export default function SettingsPage() {
           <div className="flex items-center gap-2">
             <Globe className="h-4 w-4 text-indigo-300" />
             <h2 className="text-base font-semibold text-white">
-              Extension Chrome &amp; Sécurité / Confidentialité
+              Sécurité / Confidentialité
             </h2>
           </div>
           <div className="space-y-2 text-xs text-slate-300 leading-relaxed">
-            <p>
-              <strong>Endpoint d’ingestion :</strong>{' '}
-              <code className="font-mono text-cyan-300">POST /api/jobs/ingest</code> protégé par
-              l’en-tête <code className="font-mono">X-Extension-Token</code>.
-            </p>
-            <p>
-              <strong>Installation Extension :</strong> ouvrez{' '}
-              <code className="font-mono">chrome://extensions</code>, activez le mode développeur et
-              chargez le dossier <code className="font-mono">/extension</code>.
-            </p>
             <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-3 flex items-start gap-2 text-emerald-100">
               <ShieldCheck className="h-4 w-4 shrink-0 mt-0.5" />
               <span>
-                Aucune clé API n’est exposée au navigateur. Les tokens OAuth2 Gmail sont chiffrés en
-                AES-256-GCM. Les descriptions d’offres et CV sont isolés comme données non fiables
+                Aucune clé API n’est exposée au navigateur. Les descriptions d’offres et CV sont isolés comme données non fiables
                 contre les injections de prompts, et transmis à Google Gemini uniquement pour
                 l’analyse demandée.
               </span>

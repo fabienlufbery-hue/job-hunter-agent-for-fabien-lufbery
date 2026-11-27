@@ -1,11 +1,7 @@
 import crypto from 'node:crypto';
 import { and, desc, eq, isNull } from 'drizzle-orm';
 import { getDb, schema, type AutomationErrorEntry } from '@/db';
-import {
-  getFranceTravailClient,
-  isFranceTravailConfigured,
-  mapContractTypeToFranceTravailCode,
-} from '@/lib/france-travail/client';
+import { fetchApifyJobs, isApifyConfigured } from '@/lib/apify/client';
 import { upsertNormalizedJobs } from '@/lib/jobs/repository';
 import { isGeminiConfigured } from '@/lib/gemini/client';
 import { scoreAndPersistJob } from '@/lib/gemini/scoring';
@@ -107,7 +103,7 @@ export async function runServerAutomationSync(options?: {
   const [claimed] = await db.insert(schema.automationRuns).values({
     id: runId,
     triggerType,
-    sources: ['france_travail'],
+    sources: ['apify'],
     status: 'running',
     startedAt,
   }).onConflictDoNothing({ target: schema.automationRuns.id }).returning();
@@ -120,55 +116,20 @@ export async function runServerAutomationSync(options?: {
   let jobsScored = 0;
 
   try {
-    const [prefs] = await db
-      .select()
-      .from(schema.searchPreferences)
-      .where(eq(schema.searchPreferences.id, 'primary'))
-      .limit(1);
-
-    const keywordsList = [
-      ...(prefs?.targetRoles || []),
-      ...(prefs?.keywords || []),
-    ].filter(Boolean);
-    const motsCles = keywordsList.slice(0, 3).join(' ') || 'développeur';
-    const departement = prefs?.departmentCodes?.[0] || undefined;
-    const commune = prefs?.communeCodes?.[0] || undefined;
-    const mappedContract = prefs?.contractTypes?.[0]
-      ? mapContractTypeToFranceTravailCode(prefs.contractTypes[0]) || undefined
-      : undefined;
-
     let newJobIds: string[] = [];
-
-    if (!isFranceTravailConfigured()) {
-      errors.push({
-        source: 'france_travail',
-        code: 'NOT_CONFIGURED',
-        message:
-          'Identifiants France Travail non configurés (FRANCE_TRAVAIL_CLIENT_ID / FRANCE_TRAVAIL_CLIENT_SECRET).',
-      });
+    if (!isApifyConfigured()) {
+      errors.push({ source: 'apify', code: 'NOT_CONFIGURED', message: 'Configurez APIFY_API_TOKEN et APIFY_TASK_ID.' });
     } else {
       try {
-        const ftClient = getFranceTravailClient();
-        const searchRes = await ftClient.searchOffers({
-          motsCles,
-          departement,
-          commune,
-          typeContrat: mappedContract,
-          maxResults: options?.maxOffers ?? 50,
-          sort: '1',
-        });
-
-        const upsertRes = await upsertNormalizedJobs(searchRes.offers);
-        jobsFetched = upsertRes.fetched;
-        jobsNew = upsertRes.inserted;
-        jobsDuplicates = upsertRes.duplicates;
-        newJobIds = upsertRes.newJobIds;
+        const { offers, fetched, rejected } = await fetchApifyJobs(options?.maxOffers ?? 100);
+        const result = await upsertNormalizedJobs(offers);
+        jobsFetched = fetched;
+        jobsNew = result.inserted;
+        jobsDuplicates = result.duplicates;
+        newJobIds = result.newJobIds;
+        if (rejected) errors.push({ source: 'apify', code: 'INVALID_ITEMS', message: rejected + ' élément(s) non importé(s).' });
       } catch (err) {
-        errors.push({
-          source: 'france_travail',
-          code: 'API_ERROR',
-          message: err instanceof Error ? err.message : 'Erreur API France Travail',
-        });
+        errors.push({ source: 'apify', code: 'API_ERROR', message: err instanceof Error ? err.message : 'Erreur Apify' });
       }
     }
 

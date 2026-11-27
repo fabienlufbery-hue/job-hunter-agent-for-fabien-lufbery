@@ -8,7 +8,6 @@ import {
   getGeminiModel,
 } from '@/lib/gemini/client';
 import { SCORING_RUBRIC_DOC } from '@/lib/gemini/scoring';
-import { FRANCE_TRAVAIL_APP_NAME } from '@/lib/france-travail/client';
 
 export async function GET() {
   const auth = await requireSessionOrDemo();
@@ -24,7 +23,6 @@ export async function GET() {
       geminiModelAcademicOriginal: ACADEMIC_ORIGINAL_MODEL,
       geminiDeprecationNote: GEMINI_MODEL_DEPRECATION_NOTE,
       scoringRubric: SCORING_RUBRIC_DOC,
-      franceTravailAppName: FRANCE_TRAVAIL_APP_NAME,
     },
   });
 }

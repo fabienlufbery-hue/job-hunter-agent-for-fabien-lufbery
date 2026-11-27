@@ -78,12 +78,6 @@ export default function JobMatchesPage() {
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [sortBy, setSortBy] = useState('score');
 
-  // France Travail manual sync modal
-  const [showFtSync, setShowFtSync] = useState(false);
-  const [ftKeywords, setFtKeywords] = useState('développeur');
-  const [ftDept, setFtDept] = useState('75');
-  const [ftContract, setFtContract] = useState('CDI');
-
   const loadJobs = useCallback((signal?: AbortSignal) => {
     const params = new URLSearchParams();
     if (q) params.set('q', q);
@@ -181,34 +175,18 @@ export default function JobMatchesPage() {
     }
   }
 
-  async function runFranceTravailSync(e: React.FormEvent) {
-    e.preventDefault();
-    setBusyAction('ft-sync');
+  async function syncApify() {
+    setBusyAction('apify-sync');
     setFeedback(null);
     try {
-      const res = await fetch('/api/jobs/sync/france-travail', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          motsCles: ftKeywords,
-          departement: ftDept || undefined,
-          typeContrat: ftContract || undefined,
-          maxResults: 25,
-        }),
-      });
+      const res = await fetch('/api/jobs/sync/apify', { method: 'POST' });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erreur France Travail');
-      setFeedback({
-        kind: 'ok',
-        text: `France Travail synchronisé : ${data.inserted} nouvelle(s) offre(s), ${data.duplicates} doublon(s) (sur ${data.totalAvailable} disponibles).`,
-      });
-      setShowFtSync(false);
+      if (!res.ok) throw new Error(data.error || 'Erreur Apify');
+      setFeedback({ kind: 'ok', text: 'Apify : ' + data.inserted + ' nouvelles, ' + data.duplicates + ' doublons, ' + data.rejected + ' rejetées.' });
       await loadJobs();
     } catch (err) {
-      setFeedback({ kind: 'err', text: err instanceof Error ? err.message : 'Erreur France Travail' });
-    } finally {
-      setBusyAction(null);
-    }
+      setFeedback({ kind: 'err', text: err instanceof Error ? err.message : 'Erreur Apify' });
+    } finally { setBusyAction(null); }
   }
 
   return (
@@ -221,11 +199,11 @@ export default function JobMatchesPage() {
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => setShowFtSync((v) => !v)}
-              disabled={isDemo}
+              onClick={syncApify}
+              disabled={isDemo || loading || busyAction !== null}
             >
               <RefreshCw className="h-3.5 w-3.5" />
-              Recherche France Travail API
+              Importer les offres Apify
             </Button>
             <Button variant="secondary" size="sm" onClick={() => void loadJobs()} disabled={loading}>
               Actualiser
@@ -249,42 +227,6 @@ export default function JobMatchesPage() {
           )}
           <span>{feedback.text}</span>
         </div>
-      )}
-
-      {showFtSync && (
-        <GlassCard className="border-cyan-400/25">
-          <form onSubmit={runFranceTravailSync} className="grid gap-3 sm:grid-cols-4 items-end">
-            <div>
-              <label className="text-xs text-slate-400 block mb-1">Mots-clés</label>
-              <Input
-                value={ftKeywords}
-                onChange={(e) => setFtKeywords(e.target.value)}
-                placeholder="ex: développeur typescript"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-slate-400 block mb-1">Département (ex: 75, 69)</label>
-              <Input
-                value={ftDept}
-                onChange={(e) => setFtDept(e.target.value)}
-                placeholder="75"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-slate-400 block mb-1">Contrat</label>
-              <Select value={ftContract} onChange={(e) => setFtContract(e.target.value)}>
-                <option value="">Tous</option>
-                <option value="CDI">CDI</option>
-                <option value="CDD">CDD</option>
-                <option value="MIS">Intérim (MIS)</option>
-                <option value="LIB">Freelance (LIB)</option>
-              </Select>
-            </div>
-            <Button type="submit" disabled={busyAction === 'ft-sync'}>
-              {busyAction === 'ft-sync' ? 'Synchronisation...' : 'Importer France Travail'}
-            </Button>
-          </form>
-        </GlassCard>
       )}
 
       {/* Filters Toolbar */}
