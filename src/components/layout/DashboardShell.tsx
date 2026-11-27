@@ -166,7 +166,7 @@ export function DashboardShell({
                   Job Hunter Agent for Fabien Lufbery
                 </p>
                 <p className="hidden sm:block text-xs text-slate-400">
-                  Moteur hybride 5 plateformes · France Travail API v2 · Gemini AI · Gmail OAuth2
+                  Apify · Gemini AI
                 </p>
               </div>
             </div>

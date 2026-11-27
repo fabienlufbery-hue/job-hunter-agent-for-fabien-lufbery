@@ -5,7 +5,6 @@ import {
   Clock,
   Play,
   Server,
-  Globe,
   AlertTriangle,
   CheckCircle2,
   XCircle,
@@ -93,7 +92,7 @@ export default function AutomationPage() {
     <div className="space-y-6">
       <SectionHeader
         title="Automation — Planification 09h00 & 18h00"
-        subtitle="Orchestration quotidienne fuseau Europe/Paris (changement d’heure DST géré) distinguant API serveur et extension navigateur."
+        subtitle="Orchestration quotidienne fuseau Europe/Paris (changement d’heure DST géré) avec Apify et Gemini."
         action={
           <>
             <Button variant="secondary" size="sm" onClick={() => void load()} disabled={loading}>
@@ -130,7 +129,7 @@ export default function AutomationPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-sm font-semibold text-white">
               <Server className="h-4 w-4 text-cyan-300" />
-              Automatisation Serveur (France Travail + Gemini)
+              Automatisation Serveur (Apify + Gemini)
             </div>
             <Badge variant={data?.schedule.cronSecretConfigured ? 'success' : 'warning'}>
               {data?.schedule.cronSecretConfigured ? 'CRON_SECRET actif' : 'CRON_SECRET à configurer'}
@@ -151,45 +150,8 @@ export default function AutomationPage() {
         </GlassCard>
 
         <GlassCard className="space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-sm font-semibold text-white">
-              <Globe className="h-4 w-4 text-indigo-300" />
-              Synchronisation Navigateur (WTTJ, Indeed, HelloWork, Meteojob)
-            </div>
-            <Badge
-              variant={
-                data?.extensionHeartbeat?.browserStatus === 'active'
-                  ? 'success'
-                  : data?.extensionHeartbeat?.browserStatus === 'needs_attention'
-                    ? 'warning'
-                    : 'default'
-              }
-            >
-              {data?.extensionHeartbeat?.browserStatus === 'active'
-                ? 'Chrome actif'
-                : data?.extensionHeartbeat?.browserStatus === 'demo'
-                  ? 'Mode Démo'
-                  : 'Chrome fermé / inactif'}
-            </Badge>
-          </div>
-          <p className="text-xs text-slate-300 leading-relaxed">
-            Ces 4 plateformes nécessitent un navigateur Chrome actif afin de respecter les conditions
-            d’utilisation et d’éviter tout contournement anti-bot. L’extension déclenche un badge de
-            rappel à 09h00 et 18h00 dès que Chrome est ouvert.
-          </p>
-          <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-3 text-xs flex items-center justify-between">
-            <span className="text-slate-400">Dernière synchro extension</span>
-            <span className="text-slate-200">
-              {data?.extensionHeartbeat?.lastSyncAt
-                ? formatFrDate(data.extensionHeartbeat.lastSyncAt)
-                : 'Aucune synchronisation reçue'}
-            </span>
-          </div>
-          {data?.extensionHeartbeat?.lastError && (
-            <p className="text-xs text-amber-300">
-              Alerte navigateur : {data.extensionHeartbeat.lastError}
-            </p>
-          )}
+          <h2 className="text-sm font-semibold text-white">Collecte Apify</h2>
+          <p className="text-xs text-slate-300">Planifiez les collectes dans Apify avant les créneaux d’import de 09h00 et 18h00. Le serveur lit le dernier résultat réussi et analyse les nouvelles offres avec Gemini. Aucun navigateur local requis.</p>
         </GlassCard>
       </div>
 
