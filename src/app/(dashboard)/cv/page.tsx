@@ -113,13 +113,11 @@ export default function MyCvPage() {
   const [savingPrefs, setSavingPrefs] = useState(false);
   const [feedback, setFeedback] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
-  async function loadAll() {
-    setLoading(true);
-    try {
-      const [cvRes, prefsRes] = await Promise.all([
+  function loadAll() {
+    return Promise.all([
         fetch('/api/cv').then((r) => r.json()),
         fetch('/api/cv/preferences').then((r) => r.json()),
-      ]);
+    ]).then(([cvRes, prefsRes]) => {
       setIsDemo(Boolean(cvRes.isDemo));
       setCv(cvRes.cv || null);
       if (prefsRes.preferences) {
@@ -128,15 +126,15 @@ export default function MyCvPage() {
           ...prefsRes.preferences,
         });
       }
-    } catch {
+    }).catch(() => {
       setFeedback({ kind: 'err', text: 'Erreur lors du chargement du CV.' });
-    } finally {
+    }).finally(() => {
       setLoading(false);
-    }
+    });
   }
 
   useEffect(() => {
-    loadAll();
+    void loadAll();
   }, []);
 
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {

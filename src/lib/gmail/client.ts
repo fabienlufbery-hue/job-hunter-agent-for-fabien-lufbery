@@ -7,7 +7,6 @@ import { decryptSecret, encryptSecret } from '@/lib/crypto';
 
 export const GMAIL_MINIMAL_SCOPES = [
   'https://www.googleapis.com/auth/gmail.compose',
-  'https://www.googleapis.com/auth/gmail.send',
   'https://www.googleapis.com/auth/userinfo.email',
 ];
 
@@ -59,7 +58,6 @@ export function buildGmailAuthUrl(state: string): string {
     prompt: 'consent',
     scope: GMAIL_MINIMAL_SCOPES,
     state,
-    include_granted_scopes: true,
   });
 }
 
@@ -92,9 +90,11 @@ export async function exchangeGmailCodeAndStore(code: string): Promise<{
     .limit(1);
 
   const encryptedAccessToken = encryptSecret(tokens.access_token);
+  const oldAccountToken = accountEmail && accountEmail === existingRows[0]?.accountEmail
+    ? existingRows[0].encryptedRefreshToken : null;
   const encryptedRefreshToken = tokens.refresh_token
     ? encryptSecret(tokens.refresh_token)
-    : existingRows[0]?.encryptedRefreshToken || null;
+    : oldAccountToken;
   const expiresAt = tokens.expiry_date ? new Date(tokens.expiry_date) : null;
   const scope = tokens.scope || GMAIL_MINIMAL_SCOPES.join(' ');
 
@@ -102,7 +102,7 @@ export async function exchangeGmailCodeAndStore(code: string): Promise<{
     await db
       .update(schema.oauthTokens)
       .set({
-        accountEmail: accountEmail || existingRows[0].accountEmail,
+        accountEmail,
         encryptedAccessToken,
         encryptedRefreshToken,
         scope,
@@ -190,8 +190,8 @@ export async function disconnectGmail(): Promise<void> {
   if (row && isGmailOAuthConfigured()) {
     try {
       const oauth2Client = createGoogleOAuth2Client();
-      const accessToken = decryptSecret(row.encryptedAccessToken);
-      await oauth2Client.revokeToken(accessToken);
+      const token = decryptSecret(row.encryptedRefreshToken || row.encryptedAccessToken);
+      await oauth2Client.revokeToken(token);
     } catch {
       // Ignore revocation network error and still remove local encrypted tokens
     }

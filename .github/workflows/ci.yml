@@ -6,12 +6,17 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js 24
         uses: actions/setup-node@v4
@@ -21,6 +26,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: ESLint
+        run: npm run lint
 
       - name: TypeScript typecheck
         run: npm run typecheck
@@ -33,5 +41,3 @@ jobs:
 
       - name: Production Next.js build
         run: npm run build
-        env:
-          AUTH_SECRET: ci-build-placeholder-secret-not-for-prod-123456

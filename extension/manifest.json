@@ -16,8 +16,7 @@
     "https://www.hellowork.com/*",
     "https://www.meteojob.com/*",
     "http://localhost:3000/*",
-    "https://job-hunter-agent-for-fabien-lufbery.vercel.app/*",
-    "https://*.vercel.app/*"
+    "https://job-hunter-agent-for-fabien-lufbery.vercel.app/*"
   ],
   "icons": {
     "16": "icons/icon16.png",
@@ -55,5 +54,9 @@
       ],
       "run_at": "document_idle"
     }
-  ]
+  ],
+  "optional_host_permissions": [
+    "https://*/*"
+  ],
+  "minimum_chrome_version": "102"
 }

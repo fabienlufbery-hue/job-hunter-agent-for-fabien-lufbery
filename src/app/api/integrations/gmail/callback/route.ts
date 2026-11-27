@@ -2,11 +2,11 @@ import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { getCurrentSession } from '@/lib/auth';
 import { safeEqual } from '@/lib/crypto';
-import { exchangeGmailCodeAndStore } from '@/lib/gmail/client';
+import { exchangeGmailCodeAndStore, getGmailRedirectUri } from '@/lib/gmail/client';
 
 export async function GET(request: Request) {
   const session = await getCurrentSession();
-  const baseUrl = new URL(request.url).origin;
+  const baseUrl = new URL(getGmailRedirectUri()).origin;
 
   if (!session || session.role !== 'owner') {
     return NextResponse.redirect(`${baseUrl}/login?error=gmail_auth_required`);
@@ -19,7 +19,7 @@ export async function GET(request: Request) {
 
   if (oauthError) {
     return NextResponse.redirect(
-      `${baseUrl}/integrations?gmail=error&reason=${encodeURIComponent(oauthError)}`
+      `${baseUrl}/integrations?gmail=error&reason=authorization_refused`
     );
   }
 
@@ -35,10 +35,9 @@ export async function GET(request: Request) {
     const response = NextResponse.redirect(`${baseUrl}/integrations?gmail=connected`);
     response.cookies.set('gmail_oauth_state', '', { maxAge: 0, path: '/' });
     return response;
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : 'oauth_exchange_failed';
-    return NextResponse.redirect(
-      `${baseUrl}/integrations?gmail=error&reason=${encodeURIComponent(msg.slice(0, 140))}`
-    );
+  } catch {
+    const response = NextResponse.redirect(`${baseUrl}/integrations?gmail=error&reason=oauth_exchange_failed`);
+    response.cookies.set('gmail_oauth_state', '', { maxAge: 0, path: '/' });
+    return response;
   }
 }

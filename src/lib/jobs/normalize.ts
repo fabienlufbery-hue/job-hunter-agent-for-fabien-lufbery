@@ -13,7 +13,7 @@ export const rawJobInputSchema = z.object({
   description: z.string().trim().max(40000).default(''),
   skills: z.array(z.string().trim().min(1).max(80)).max(50).optional().default([]),
   publishedAt: z.string().nullable().optional(),
-  originalUrl: z.string().trim().refine(isValidHttpUrl, 'URL originale invalide'),
+  originalUrl: z.string().trim().max(4096).refine(isValidHttpUrl, 'URL originale invalide'),
   source: z.enum(JOB_SOURCES),
   recruiterEmail: z
     .string()

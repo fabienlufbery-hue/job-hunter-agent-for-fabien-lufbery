@@ -42,19 +42,20 @@ export default function IntegrationsPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
-  async function load() {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/integrations/status');
+  function load() {
+    return fetch('/api/integrations/status').then(async (res) => {
       const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Erreur chargement intégrations');
       setData(json);
-    } finally {
+    }).catch((error) => {
+      setMessage(error instanceof Error ? error.message : 'Erreur réseau');
+    }).finally(() => {
       setLoading(false);
-    }
+    });
   }
 
   useEffect(() => {
-    load();
+    void load();
   }, []);
 
   async function disconnectGmail() {
@@ -81,7 +82,7 @@ export default function IntegrationsPage() {
         subtitle="Aucun statut « Connected » n’est affiché artificiellement : chaque état reflète la configuration et les vérifications réelles."
         action={
           <>
-            <Button variant="secondary" size="sm" onClick={load} disabled={loading}>
+            <Button variant="secondary" size="sm" onClick={() => void load()} disabled={loading}>
               <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
               Vérifier l’état
             </Button>

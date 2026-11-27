@@ -236,10 +236,21 @@ export async function getDb(): Promise<AppDatabase> {
             connectionTimeoutMillis: 10_000,
           });
           state.pool = pool;
-          state.db = drizzlePg(pool, { schema });
-          for (const stmt of BOOTSTRAP_STATEMENTS) {
-            await pool.query(stmt);
+          const connection = await pool.connect();
+          try {
+            await connection.query('BEGIN');
+            await connection.query("SELECT pg_advisory_xact_lock(hashtext('job-hunter-schema'))");
+            for (const stmt of BOOTSTRAP_STATEMENTS) {
+              await connection.query(stmt);
+            }
+            await connection.query('COMMIT');
+          } catch (error) {
+            await connection.query('ROLLBACK').catch(() => {});
+            throw error;
+          } finally {
+            connection.release();
           }
+          state.db = drizzlePg(pool, { schema });
         } else if (desiredMode === 'pglite_memory') {
           const client = new PGlite('memory://');
           await client.waitReady;
@@ -262,6 +273,9 @@ export async function getDb(): Promise<AppDatabase> {
         state.initialized = true;
         state.lastError = null;
       } catch (err) {
+        await state.pool?.end().catch(() => {});
+        state.pool = null;
+        state.db = null;
         state.initialized = false;
         state.initPromise = null;
         state.lastError = err instanceof Error ? err.message : 'Database connection failed';

@@ -12,14 +12,16 @@ const heartbeatSchema = z.object({
 });
 
 function corsHeaders(origin: string | null): Record<string, string> {
-  return {
-    'Access-Control-Allow-Origin':
-      origin && (origin.startsWith('chrome-extension://') || origin.startsWith('http://localhost'))
-        ? origin
-        : '*',
+  const headers: Record<string, string> = {
+    Vary: 'Origin',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Extension-Token',
   };
+  if (origin && (/^chrome-extension:\/\/[a-p]{32}$/.test(origin)
+      || (process.env.NODE_ENV !== 'production' && origin === 'http://localhost:3000'))) {
+    headers['Access-Control-Allow-Origin'] = origin;
+  }
+  return headers;
 }
 
 export async function OPTIONS(request: Request) {

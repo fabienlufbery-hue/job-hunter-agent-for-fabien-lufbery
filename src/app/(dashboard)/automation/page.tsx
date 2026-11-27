@@ -53,22 +53,20 @@ export default function AutomationPage() {
   const [running, setRunning] = useState(false);
   const [feedback, setFeedback] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
-  async function load() {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/automation');
+  function load() {
+    return fetch('/api/automation').then(async (res) => {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Erreur chargement');
       setData(json);
-    } catch (err) {
+    }).catch((err) => {
       setFeedback({ kind: 'err', text: err instanceof Error ? err.message : 'Erreur' });
-    } finally {
+    }).finally(() => {
       setLoading(false);
-    }
+    });
   }
 
   useEffect(() => {
-    load();
+    void load();
   }, []);
 
   async function triggerManualRun() {
@@ -98,7 +96,7 @@ export default function AutomationPage() {
         subtitle="Orchestration quotidienne fuseau Europe/Paris (changement d’heure DST géré) distinguant API serveur et extension navigateur."
         action={
           <>
-            <Button variant="secondary" size="sm" onClick={load} disabled={loading}>
+            <Button variant="secondary" size="sm" onClick={() => void load()} disabled={loading}>
               <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
               Actualiser
             </Button>

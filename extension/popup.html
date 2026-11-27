@@ -52,6 +52,7 @@
       <details class="glass-card accordion">
         <summary>Importation assistée (si page protégée / DOM modifié)</summary>
         <div class="form-grid">
+          <input id="manualUrl" type="url" placeholder="URL originale de l’offre *" />
           <input id="manualTitle" type="text" placeholder="Intitulé du poste *" />
           <input id="manualCompany" type="text" placeholder="Entreprise" />
           <input id="manualLocation" type="text" placeholder="Localisation" />
@@ -83,11 +84,23 @@
         </div>
       </details>
 
+      <details class="glass-card accordion">
+        <summary>Collecte planifiée (09h00 et 18h00)</summary>
+        <p class="value-muted">Cochez uniquement les plateformes qui vous ont autorisé la lecture automatisée.
+          La collecte traite les onglets déjà ouverts dans Chrome et s’arrête devant toute vérification.</p>
+        <label><input type="checkbox" name="authorizedSource" value="welcome_to_the_jungle" /> Welcome to the Jungle</label><br />
+        <label><input type="checkbox" name="authorizedSource" value="indeed" /> Indeed</label><br />
+        <label><input type="checkbox" name="authorizedSource" value="hellowork" /> HelloWork</label><br />
+        <label><input type="checkbox" name="authorizedSource" value="meteojob" /> Meteojob</label>
+        <p id="scheduleStatus" class="value-muted" role="status"></p>
+      </details>
+
       <footer class="footer">
         <span>Rappels 09h00 & 18h00 (Europe/Paris) · Aucun cookie transmis</span>
       </footer>
     </div>
 
+    <script src="extractors/common.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>

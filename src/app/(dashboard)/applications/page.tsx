@@ -89,10 +89,8 @@ export default function ApplicationsPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
-  async function loadApps() {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/applications');
+  function loadApps() {
+    return fetch('/api/applications').then(async (res) => {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Erreur chargement candidatures');
       setApps(data.applications || []);
@@ -104,29 +102,29 @@ export default function ApplicationsPage() {
           ? prev
           : firstId
       );
-    } catch (err) {
+    }).catch((err) => {
       setFeedback({ kind: 'err', text: err instanceof Error ? err.message : 'Erreur' });
-    } finally {
+    }).finally(() => {
       setLoading(false);
-    }
+    });
   }
 
   useEffect(() => {
-    loadApps();
+    void loadApps();
   }, []);
 
   const selected = apps.find((a) => a.id === selectedId) || null;
 
-  useEffect(() => {
-    if (selected) {
-      setCoverLetter(selected.coverLetter);
-      setPresentationPage(selected.presentationPage);
-      setEmailSubject(selected.emailSubject);
-      setEmailBody(selected.emailBody);
-      setRecipientEmail(selected.recipientEmail || '');
-      setHumanConfirmed(false);
-    }
-  }, [selected]);
+  const [draftSource, setDraftSource] = useState<ApplicationItem | null>(null);
+  if (selected !== draftSource) {
+    setDraftSource(selected);
+    setCoverLetter(selected?.coverLetter ?? '');
+    setPresentationPage(selected?.presentationPage ?? '');
+    setEmailSubject(selected?.emailSubject ?? '');
+    setEmailBody(selected?.emailBody ?? '');
+    setRecipientEmail(selected?.recipientEmail ?? '');
+    setHumanConfirmed(false);
+  }
 
   async function handleSaveEdits() {
     if (!selected) return;

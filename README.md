@@ -1,9 +1,11 @@
 # Job Hunter Agent for Fabien Lufbery
 
 > **Antigravity Developer Challenge — Building an Autonomous Job Search Assistant**
-> Assistant autonome complet de recherche d'emploi, de scoring IA Gemini, de génération de candidatures personnalisées et d'envoi Gmail encadré par validation humaine.
+> Assistant de recherche d'emploi, de scoring IA Gemini, de génération de candidatures personnalisées et d'envoi Gmail encadré par validation humaine.
 
 ---
+
+**Qualification du 27 novembre 2026.** La version corrigée se compile localement. Les appels réels France Travail, Gemini et Gmail, l’extension installée et le déploiement Vercel restent à qualifier. Le [rapport](FINAL_REPORT.md) et la [matrice](docs/COMPLIANCE_MATRIX.md) détaillent les preuves.
 
 ## 1. Objectif du projet
 
@@ -38,9 +40,9 @@ flowchart LR
 
 ```text
 job-hunter-agent-for-fabien-lufbery/
-├── automation/github-workflows/
-│   ├── ci.yml                     # Template CI (Typecheck, Vitest, secrets, build)
-│   └── daily-job-sync.yml         # Template Cron 09h00 & 18h00 Europe/Paris (DST-safe)
+├── .github/workflows/
+│   ├── ci.yml                     # CI (ESLint, Typecheck, Vitest, secrets, build)
+│   └── daily-job-sync.yml         # Cron 09h00 & 18h00 Europe/Paris (DST-safe)
 ├── drizzle/schema.sql             # Schéma PostgreSQL complet
 ├── extension/                     # Extension Chrome Manifest V3 autonome (chargeable sans build)
 │   ├── manifest.json
@@ -134,13 +136,9 @@ Voir le guide complet étape par étape dans [docs/SETUP.md](docs/SETUP.md).
 
 ## 6. Automatisation (09h00 & 18h00 Europe/Paris)
 
-- **Serveur (France Travail + Scoring Gemini)** :
-  - Vercel Hobby limite Vercel Cron à **1 exécution/jour**. Pour respecter strictement les **2 exécutions quotidiennes (09h00 et 18h00 Europe/Paris)** tout en gérant l'heure d'été/hiver (CET/CEST), le workflow [`automation/github-workflows/daily-job-sync.yml`](automation/github-workflows/daily-job-sync.yml) se déclenche sur les créneaux UTC `0 7,8,16,17 * * *` et vérifie `TZ="Europe/Paris" date +%H` (`09` ou `18`) avant d'appeler `POST $APP_URL/api/cron/sync` avec `Authorization: Bearer $CRON_SECRET`. *(Activation dans `.github/workflows/` après `gh auth refresh -s workflow`.)*
-  - Un script local macOS `launchd` ([`scripts/install-macos-launchd.sh`](scripts/install-macos-launchd.sh)) est également fourni.
-- **Navigateur (WTTJ, Indeed, HelloWork, Meteojob)** :
-  - Ces 4 plateformes requièrent Chrome actif. L'extension utilise `chrome.alarms` pour afficher le badge `SYNC` à 09h00 et 18h00 Europe/Paris et transmet un heartbeat à `/api/extension/status`. Lorsque Chrome est fermé, le tableau de bord indique honnêtement l'état *hors ligne*.
-
----
+- **Serveur.** Le workflow [Daily Job Sync](.github/workflows/daily-job-sync.yml) est défini à **09h00 et 18h00 Europe/Paris** avec la gestion du changement d’heure par GitHub Actions. La route associe un seul lancement à chaque créneau, et le traitement peut reprendre les offres importées par le navigateur et encore à évaluer.
+- **Chrome.** L’extension tente la collecte sur les onglets déjà ouverts des plateformes autorisées. En cas de vérification, elle laisse le navigateur dans son état et signale l’action nécessaire. L’import assisté accepte les informations saisies et l’URL originale.
+- **Configuration et preuve.** Les étapes Vercel, Neon, Gmail et GitHub Actions sont dans le [guide](docs/SETUP.md). Les 10 images versionnées illustrent l’interface avant cette reprise.
 
 ## 7. Déploiement Vercel
 
@@ -156,7 +154,7 @@ Voir le guide complet étape par étape dans [docs/SETUP.md](docs/SETUP.md).
 ```bash
 npm run typecheck      # Vérification TypeScript strict
 npm test               # 26 tests unitaires & d'intégration Vitest
-npm run check:secrets  # Audit d'absence de secrets exposés
+npm run check:secrets  # Motifs de secrets dans les fichiers et l’historique
 npm run build          # Build de production Next.js 16
 ```
 

@@ -22,6 +22,12 @@ export function getGeminiClient(apiKey?: string): GoogleGenAI {
   return new GoogleGenAI({ apiKey: key });
 }
 
+function describeGeminiError(error: unknown): string {
+  const detail = error instanceof Error ? error.message : '';
+  const status = detail.match(/\b(400|401|403|404|429|500|502|503|504)\b/)?.[1];
+  return status ? `Requête Gemini refusée (HTTP ${status}).` : 'Requête Gemini indisponible.';
+}
+
 export async function withGeminiRetry<T>(
   operation: () => Promise<T>,
   options?: { maxAttempts?: number; sleepMs?: (ms: number) => Promise<void> }
@@ -46,12 +52,12 @@ export async function withGeminiRetry<T>(
         msg.includes('ECONNRESET');
 
       if (!isRetryable || attempt >= maxAttempts) {
-        throw err;
+        throw new Error(describeGeminiError(err));
       }
       await sleep(attempt * 800);
     }
   }
-  throw lastError;
+  throw new Error(describeGeminiError(lastError));
 }
 
 export async function testGeminiConnection(): Promise<{
@@ -77,7 +83,7 @@ export async function testGeminiConnection(): Promise<{
     const res = await client.models.generateContent({
       model,
       contents: 'Reply with OK only.',
-      config: { temperature: 0, maxOutputTokens: 8 },
+      config: { store: false, maxOutputTokens: 128, httpOptions: { timeout: 15_000 } },
     });
     return {
       configured: true,
@@ -91,7 +97,7 @@ export async function testGeminiConnection(): Promise<{
       connected: false,
       model,
       latencyMs: Date.now() - start,
-      error: err instanceof Error ? err.message : 'Erreur Gemini API',
+      error: describeGeminiError(err),
     };
   }
 }

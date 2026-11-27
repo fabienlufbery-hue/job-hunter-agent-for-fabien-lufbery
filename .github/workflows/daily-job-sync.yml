@@ -1,0 +1,41 @@
+name: Daily Job Sync (09:00 & 18:00 Europe/Paris)
+
+on:
+  schedule:
+    - cron: '0 9,18 * * *'
+      timezone: 'Europe/Paris'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: job-hunter-server-sync
+  cancel-in-progress: false
+
+jobs:
+  trigger-sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger Job Hunter Agent server sync
+        env:
+          APP_URL: ${{ vars.APP_URL || secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$APP_URL" != https://* || -z "$CRON_SECRET" ]]; then
+            echo "::error::Configure the HTTPS APP_URL and CRON_SECRET in GitHub."
+            exit 1
+          fi
+          target="${APP_URL%/}/api/cron/sync"
+          if [[ "$EVENT_NAME" == workflow_dispatch ]]; then
+            target="$target?force=true"
+          fi
+          http_code=$(curl --silent --show-error --max-time 175 --output response.json --write-out '%{http_code}' \
+            --request POST "$target" --header "Authorization: Bearer $CRON_SECRET")
+          jq -c '{ok, skipped, reason, status: .run.status, runId: .run.runId,
+            fetched: .run.jobsFetched, scored: .run.jobsScored, codes: [.run.errors[]?.code]}' response.json
+          if [[ "$http_code" != 200 ]]; then
+            echo "::error::Sync returned HTTP $http_code."
+            exit 1
+          fi

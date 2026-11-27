@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { desc, eq } from 'drizzle-orm';
 import { getDb, schema } from '@/db';
-import { mergeProvenance, normalizeJobInput, type RawJobInput } from './normalize';
+import { computeJobContentHash, mergeProvenance, normalizeJobInput, type RawJobInput } from './normalize';
 
 export interface UpsertJobsResult {
   fetched: number;
@@ -23,17 +23,39 @@ export async function upsertNormalizedJobs(rawInputs: RawJobInput[]): Promise<Up
   for (const raw of rawInputs) {
     const normalized = normalizeJobInput(raw);
 
-    const existingRows = await db
-      .select()
-      .from(schema.jobs)
-      .where(eq(schema.jobs.dedupeHash, normalized.dedupeHash))
-      .limit(1);
+    const result = await db.transaction(async (tx) => {
+      const id = crypto.randomUUID();
+      const [created] = await tx.insert(schema.jobs).values({
+        id,
+        externalId: normalized.externalId,
+        dedupeHash: normalized.dedupeHash,
+        contentHash: normalized.contentHash,
+        title: normalized.title,
+        company: normalized.company,
+        location: normalized.location,
+        contractType: normalized.contractType,
+        salary: normalized.salary,
+        description: normalized.description,
+        skills: normalized.skills,
+        publishedAt: normalized.publishedAt,
+        collectedAt: normalized.collectedAt,
+        originalUrl: normalized.originalUrl,
+        source: normalized.source,
+        provenance: normalized.provenance,
+        applicationStatus: 'new',
+        isFavorite: false,
+        recruiterEmail: normalized.recruiterEmail,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }).onConflictDoNothing({ target: schema.jobs.dedupeHash }).returning();
 
-    const existing = existingRows[0];
+      if (created) return { id: created.id, created: true, updated: false };
 
-    if (existing) {
-      duplicates += 1;
-      jobIds.push(existing.id);
+      const [existing] = await tx.select()
+        .from(schema.jobs)
+        .where(eq(schema.jobs.dedupeHash, normalized.dedupeHash))
+        .for('update');
+      if (!existing) throw new Error('Offre concurrente introuvable après déduplication.');
 
       const mergedProvenance = mergeProvenance(existing.provenance || [], normalized.provenance);
       const mergedSkills = Array.from(
@@ -51,58 +73,44 @@ export async function upsertNormalizedJobs(rawInputs: RawJobInput[]): Promise<Up
       const shouldUpdate =
         mergedProvenance.length !== (existing.provenance?.length || 0) ||
         bestDescription !== existing.description ||
+        (!existing.location && Boolean(normalized.location)) ||
+        (!existing.contractType && Boolean(normalized.contractType)) ||
         (!existing.salary && Boolean(normalized.salary)) ||
         (!existing.recruiterEmail && Boolean(normalized.recruiterEmail)) ||
         mergedSkills.length !== (existing.skills?.length || 0);
 
       if (shouldUpdate) {
-        updated += 1;
-        await db
+        const content = {
+          title: existing.title,
+          company: existing.company,
+          description: bestDescription,
+          contractType: existing.contractType || normalized.contractType,
+          location: existing.location || normalized.location,
+          skills: mergedSkills,
+        };
+        await tx
           .update(schema.jobs)
           .set({
-            description: bestDescription,
+            ...content,
             salary: existing.salary || normalized.salary,
-            contractType: existing.contractType || normalized.contractType,
-            location: existing.location || normalized.location,
             recruiterEmail: existing.recruiterEmail || normalized.recruiterEmail,
-            skills: mergedSkills,
             provenance: mergedProvenance,
-            contentHash:
-              bestDescription !== existing.description ? normalized.contentHash : existing.contentHash,
+            contentHash: computeJobContentHash(content),
             updatedAt: new Date(),
           })
           .where(eq(schema.jobs.id, existing.id));
       }
-      continue;
-    }
-
-    const id = crypto.randomUUID();
-    await db.insert(schema.jobs).values({
-      id,
-      externalId: normalized.externalId,
-      dedupeHash: normalized.dedupeHash,
-      contentHash: normalized.contentHash,
-      title: normalized.title,
-      company: normalized.company,
-      location: normalized.location,
-      contractType: normalized.contractType,
-      salary: normalized.salary,
-      description: normalized.description,
-      skills: normalized.skills,
-      publishedAt: normalized.publishedAt,
-      collectedAt: normalized.collectedAt,
-      originalUrl: normalized.originalUrl,
-      source: normalized.source,
-      provenance: normalized.provenance,
-      applicationStatus: 'new',
-      isFavorite: false,
-      recruiterEmail: normalized.recruiterEmail,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      return { id: existing.id, created: false, updated: shouldUpdate };
     });
-    inserted += 1;
-    jobIds.push(id);
-    newJobIds.push(id);
+
+    jobIds.push(result.id);
+    if (result.created) {
+      inserted += 1;
+      newJobIds.push(result.id);
+    } else {
+      duplicates += 1;
+      if (result.updated) updated += 1;
+    }
   }
 
   return {

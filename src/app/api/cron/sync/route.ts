@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { verifyCronSecret } from '@/lib/auth';
 import { isScheduledParisSlot, runServerAutomationSync } from '@/lib/automation/scheduler';
 
+export const maxDuration = 180;
+
 async function handleCron(request: Request) {
   const check = verifyCronSecret(request);
   if (!check.valid) {
@@ -10,7 +12,8 @@ async function handleCron(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const force = searchParams.get('force') === 'true';
-  const slot = isScheduledParisSlot();
+  const now = new Date();
+  const slot = isScheduledParisSlot(now);
 
   if (!force && !slot.matches) {
     return NextResponse.json({
@@ -21,17 +24,22 @@ async function handleCron(request: Request) {
   }
 
   const triggerType =
-    slot.slotLabel === 'scheduled_09' || slot.slotLabel === 'scheduled_18'
+    !force && slot.slotLabel !== 'off_slot'
       ? slot.slotLabel
       : 'manual';
 
   try {
     const run = await runServerAutomationSync({
       triggerType,
+      scheduledAt: force ? undefined : now,
       maxOffers: 50,
       autoScoreLimit: 15,
     });
-    return NextResponse.json({ ok: true, skipped: false, run });
+    if (!run) return NextResponse.json({ ok: true, skipped: true, reason: 'Créneau déjà traité.' });
+    return NextResponse.json(
+      { ok: run.status !== 'failed', skipped: false, run },
+      { status: run.status === 'failed' ? 503 : 200 }
+    );
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Erreur exécution cron' },

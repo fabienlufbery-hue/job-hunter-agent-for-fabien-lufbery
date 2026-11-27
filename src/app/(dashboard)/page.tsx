@@ -67,23 +67,21 @@ export default function OverviewPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  async function load() {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch('/api/overview');
+  function load() {
+    return fetch('/api/overview').then(async (res) => {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Erreur chargement');
       setData(json);
-    } catch (err) {
+      setError(null);
+    }).catch((err) => {
       setError(err instanceof Error ? err.message : 'Erreur inconnue');
-    } finally {
+    }).finally(() => {
       setLoading(false);
-    }
+    });
   }
 
   useEffect(() => {
-    load();
+    void load();
   }, []);
 
   const maxSourceCount = Math.max(
@@ -98,7 +96,7 @@ export default function OverviewPage() {
         subtitle="Vue synthétique de vos offres collectées sur les 5 sources, scores Gemini et candidatures."
         action={
           <>
-            <Button variant="secondary" size="sm" onClick={load} disabled={loading}>
+            <Button variant="secondary" size="sm" onClick={() => void load()} disabled={loading}>
               <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
               Actualiser
             </Button>

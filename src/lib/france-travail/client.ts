@@ -165,9 +165,8 @@ export class FranceTravailClient {
     }
 
     if (!response.ok) {
-      const errText = await response.text().catch(() => '');
       throw new FranceTravailApiError(
-        `Authentification OAuth2 France Travail refusée (HTTP ${response.status})${errText ? ` : ${errText.slice(0, 200)}` : ''}`,
+        `Authentification OAuth2 France Travail refusée (HTTP ${response.status})`,
         response.status,
         response.status === 401 || response.status === 400 ? 'INVALID_CREDENTIALS' : 'AUTH_ERROR'
       );
@@ -265,9 +264,8 @@ export class FranceTravailClient {
     }
 
     if (response.status !== 200 && response.status !== 206) {
-      const errBody = await response.text().catch(() => '');
       throw new FranceTravailApiError(
-        `Erreur API France Travail (HTTP ${response.status})${errBody ? ` : ${errBody.slice(0, 200)}` : ''}`,
+        `Erreur API France Travail (HTTP ${response.status})`,
         response.status,
         'SEARCH_ERROR'
       );

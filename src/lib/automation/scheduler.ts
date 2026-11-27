@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { eq } from 'drizzle-orm';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 import { getDb, schema, type AutomationErrorEntry } from '@/db';
 import {
   getFranceTravailClient,
@@ -13,6 +13,13 @@ import { scoreAndPersistJob } from '@/lib/gemini/scoring';
 export const AUTOMATION_TIMEZONE = 'Europe/Paris';
 export const AUTOMATION_HOURS_PARIS = [9, 18] as const;
 
+const parisClock = new Intl.DateTimeFormat('en-GB', {
+  timeZone: AUTOMATION_TIMEZONE,
+  year: 'numeric', month: '2-digit', day: '2-digit',
+  hour: '2-digit', minute: '2-digit', second: '2-digit',
+  hourCycle: 'h23',
+});
+
 export interface ParisTimeParts {
   year: number;
   month: number;
@@ -23,17 +30,7 @@ export interface ParisTimeParts {
 }
 
 export function getParisTimeParts(date: Date): ParisTimeParts {
-  const formatter = new Intl.DateTimeFormat('en-GB', {
-    timeZone: AUTOMATION_TIMEZONE,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  });
-  const parts = formatter.formatToParts(date);
+  const parts = parisClock.formatToParts(date);
   const get = (type: string) => Number.parseInt(parts.find((p) => p.type === type)?.value || '0', 10);
   return {
     year: get('year'),
@@ -53,8 +50,8 @@ export function getNextScheduledRunParis(from: Date = new Date()): {
   labelParis: string;
   slotHour: 9 | 18;
 } {
-  // Walk forward in 15-minute increments up to 48 hours until exact Paris hour:00 matches 9 or 18
-  const startMs = Math.ceil(from.getTime() / (60 * 1000)) * 60 * 1000;
+  // Walk forward minute by minute up to 48 hours until exact Paris hour:00 matches 9 or 18
+  const startMs = Math.floor(from.getTime() / (60 * 1000)) * 60 * 1000;
   for (let offsetMin = 1; offsetMin <= 48 * 60; offsetMin++) {
     const candidate = new Date(startMs + offsetMin * 60 * 1000);
     const p = getParisTimeParts(candidate);
@@ -95,26 +92,26 @@ export function isScheduledParisSlot(date: Date = new Date()): {
 
 export async function runServerAutomationSync(options?: {
   triggerType?: 'scheduled_09' | 'scheduled_18' | 'manual' | 'france_travail_sync';
+  scheduledAt?: Date;
   maxOffers?: number;
   autoScoreLimit?: number;
 }) {
   const db = await getDb();
-  const runId = crypto.randomUUID();
   const startedAt = new Date();
   const triggerType = options?.triggerType ?? 'manual';
 
-  await db.insert(schema.automationRuns).values({
+  const slot = options?.scheduledAt && getParisTimeParts(options.scheduledAt);
+  const runId = slot
+    ? `${triggerType}:${slot.year}-${slot.month}-${slot.day}`
+    : crypto.randomUUID();
+  const [claimed] = await db.insert(schema.automationRuns).values({
     id: runId,
     triggerType,
     sources: ['france_travail'],
     status: 'running',
-    jobsFetched: 0,
-    jobsNew: 0,
-    jobsDuplicates: 0,
-    jobsScored: 0,
-    errors: [],
     startedAt,
-  });
+  }).onConflictDoNothing({ target: schema.automationRuns.id }).returning();
+  if (!claimed) return null;
 
   const errors: AutomationErrorEntry[] = [];
   let jobsFetched = 0;
@@ -177,14 +174,26 @@ export async function runServerAutomationSync(options?: {
 
     // Score new jobs automatically when Master CV & Gemini API are configured
     const [cvRow] = await db
-      .select({ id: schema.masterCv.id })
+      .select({ cvHash: schema.masterCv.contentHash })
       .from(schema.masterCv)
       .where(eq(schema.masterCv.id, 'primary'))
       .limit(1);
 
-    if (newJobIds.length > 0 && cvRow && isGeminiConfigured()) {
+    if (cvRow && isGeminiConfigured()) {
       const limit = options?.autoScoreLimit ?? 15;
-      for (const jobId of newJobIds.slice(0, limit)) {
+      const pending = await db
+        .select({ id: schema.jobs.id })
+        .from(schema.jobs)
+        .leftJoin(schema.jobAnalyses, and(
+          eq(schema.jobAnalyses.jobId, schema.jobs.id),
+          eq(schema.jobAnalyses.jobContentHash, schema.jobs.contentHash),
+          eq(schema.jobAnalyses.cvHash, cvRow.cvHash)
+        ))
+        .where(isNull(schema.jobAnalyses.id))
+        .orderBy(desc(schema.jobs.collectedAt))
+        .limit(limit);
+      const jobIds = [...new Set([...newJobIds, ...pending.map((job) => job.id)])];
+      for (const jobId of jobIds.slice(0, limit)) {
         try {
           const scored = await scoreAndPersistJob(jobId);
           if (!scored.cached) jobsScored += 1;
@@ -196,16 +205,16 @@ export async function runServerAutomationSync(options?: {
           });
         }
       }
-    } else if (newJobIds.length > 0 && !isGeminiConfigured()) {
+    } else if (newJobIds.length > 0) {
       errors.push({
         source: 'gemini',
-        code: 'NOT_CONFIGURED',
-        message: 'GEMINI_API_KEY non configurée : offres collectées mais non évaluées par IA.',
+        code: cvRow ? 'NOT_CONFIGURED' : 'CV_MISSING',
+        message: cvRow ? 'GEMINI_API_KEY non configurée.' : 'Importez le Master CV pour évaluer les offres.',
       });
     }
 
     const status =
-      errors.length === 0 ? 'success' : jobsFetched > 0 ? 'partial' : 'failed';
+      errors.length === 0 ? 'success' : (jobsFetched > 0 || jobsScored > 0) ? 'partial' : 'failed';
     const finishedAt = new Date();
 
     await db

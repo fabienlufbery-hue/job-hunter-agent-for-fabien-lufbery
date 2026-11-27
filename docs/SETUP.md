@@ -1,92 +1,33 @@
-# Guide d'installation et de configuration des API — Job Hunter Agent for Fabien Lufbery
+# Configuration et qualification des services
 
-Ce guide détaille pas à pas la configuration de chaque service externe sans jamais exposer de secret dans le code source ni dans Git.
+Les opérations de qualification utilisent un CV et des données de test. Renseigner les secrets dans l’environnement sécurisé de l’application à partir de `.env.example`.
 
----
+## PostgreSQL sur Neon
 
-## 1. Base de données PostgreSQL persistante (Neon — gratuit et natif Vercel)
+Vérifier d’abord s’il existe un projet dédié, puis sélectionner son offre gratuite et une région européenne si une création est nécessaire. Copier l’URL de connexion de la base dans `DATABASE_URL`, avec TLS. Au premier accès, le serveur initialise son schéma dans une transaction sous verrou. Le fichier `drizzle/schema.sql` documente les tables.
 
-1. Créez un compte gratuit sur [https://neon.tech](https://neon.tech) (ou connectez l'intégration **Neon** depuis le dashboard Vercel → *Storage*).
-2. Créez une base dans la région **Europe (Frankfurt / Paris)**.
-3. Copiez la chaîne de connexion **Pooled connection string** (`postgresql://...?sslmode=require`).
-4. Renseignez-la dans la variable d'environnement `DATABASE_URL` (local `.env.local` et Vercel).
-5. Au premier appel, l'application crée automatiquement toutes les tables PostgreSQL définies dans `drizzle/schema.sql`.
+Valider via l’interface privée en créant un CV de test, en l’éditant et en le relisant après redémarrage puis redéploiement. Supprimer le CV de test et vérifier le résultat. La route `/api/health` signale le mode et la persistance, sans afficher la chaîne de connexion.
 
----
+## Gemini
 
-## 2. API France Travail Offres d'emploi v2
+Configurer `GEMINI_API_KEY` et `GEMINI_MODEL=gemini-3.5-flash-lite`. Tester dans **Settings**, puis évaluer une offre à partir d’un CV fictif et vérifier le score entier 1–10, les compétences et la génération de candidature. `store: false` désactive la conservation optionnelle des requêtes par l’application Gemini. Les modalités du compte Google restent applicables. [Dépréciations Google](https://aistudio.google.com/docs/changelog#11-02-2026)
 
-1. Rendez-vous sur [https://francetravail.io/data/api](https://francetravail.io/data/api) et connectez-vous.
-2. Créez une application nommée exactement : **`Job Hunter Agent - Fabien Lufbery`**.
-3. Ajoutez l'API **Offres d'emploi v2** (`api_offresdemploiv2`, scope `o2dsoffre`).
-4. Récupérez :
-   - `FRANCE_TRAVAIL_CLIENT_ID` (Identifiant client)
-   - `FRANCE_TRAVAIL_CLIENT_SECRET` (Clé secrète)
-5. Ajoutez ces deux variables dans `.env.local` et dans les variables d'environnement Vercel.
-6. Dans le tableau de bord → **Settings**, cliquez sur **« Tester la connexion France Travail »** pour vérifier l'authentification OAuth2 réelle et le nombre d'offres accessibles.
+## France Travail
 
----
+L’API Offres d’emploi v2 est en accès restreint. Une demande d’accès peut être adressée au producteur. Après attribution, renseigner `FRANCE_TRAVAIL_CLIENT_ID`, `FRANCE_TRAVAIL_CLIENT_SECRET` et, selon les droits attribués, `FRANCE_TRAVAIL_SCOPE`. Dans **Settings**, vérifier l’échange OAuth, puis lancer la récupération avec plusieurs filtres. [Fiche officielle et demande d’accès](https://www.data.gouv.fr/dataservices/api-offres-demploi)
 
-## 3. API Google Gemini (`@google/genai`)
+## Gmail OAuth2
 
-1. Ouvrez [https://aistudio.google.com/apikey](https://aistudio.google.com/apikey).
-2. Créez une clé API Gemini (`GEMINI_API_KEY`).
-3. Configurez :
-   - `GEMINI_API_KEY` = votre clé
-   - `GEMINI_MODEL` = `gemini-3.5-flash-lite` *(successeur recommandé par Google suite à la dépréciation de `gemini-2.5-flash` au 1er décembre 2026)*
-4. Vérifiez dans le tableau de bord → **Settings** → **« Tester la connexion Google Gemini »**.
+Activer Gmail API dans un projet Google Cloud. Pour un client de type **Application Web**, configurer chaque URI de redirection exacte : `http://localhost:3000/api/integrations/gmail/callback` et l’équivalent sur le domaine de production. Ajouter le compte Gmail aux utilisateurs de test si l’écran de consentement est en mode test. Renseigner `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` et l’URI correspondant à l’environnement en cours. Protéger les jetons avec `TOKEN_ENCRYPTION_KEY`.
 
----
+Connecter dans **Integrations**, créer un brouillon sur une candidature fictive, vérifier la pièce jointe, modifier le brouillon dans Gmail puis tester la déconnexion. L’autorisation `gmail.compose` couvre brouillons et envoi, ce dernier exigeant une confirmation humaine. [Portées Gmail](https://developers.google.com/workspace/gmail/api/auth/scopes)
 
-## 4. Intégration Gmail OAuth2 (Google Cloud Console)
+## Extension Chrome
 
-1. Ouvrez [https://console.cloud.google.com](https://console.cloud.google.com) et créez/sélectionnez un projet.
-2. Dans **APIs & Services → Library**, activez **Gmail API**.
-3. Dans **Google Auth Platform / OAuth consent screen** :
-   - Type : **External**, statut **Testing**.
-   - Ajoutez votre adresse Gmail dans **Test users**.
-   - Ajoutez uniquement les scopes minimaux :
-     - `https://www.googleapis.com/auth/gmail.compose`
-     - `https://www.googleapis.com/auth/gmail.send`
-     - `https://www.googleapis.com/auth/userinfo.email`
-4. Dans **Credentials → Create Credentials → OAuth client ID (Web application)** :
-   - Ajoutez les **Authorized redirect URIs** :
-     - `http://localhost:3000/api/integrations/gmail/callback`
-     - `https://job-hunter-agent-for-fabien-lufbery.vercel.app/api/integrations/gmail/callback`
-5. Configurez `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` et `GOOGLE_REDIRECT_URI` dans `.env.local` et Vercel.
-6. Dans **Integrations → Gmail API**, cliquez sur **Connecter Google**.
+Dans `chrome://extensions`, charger le dossier `extension` en mode développeur. Configurer le backend et le jeton `EXTENSION_INGEST_TOKEN`. Si l’URL HTTPS diffère de la valeur prédéfinie Vercel, l’extension demande l’accès à cette origine. Le panneau de collecte demande de sélectionner uniquement les sites qui autorisent la lecture automatisée. Pour les autres, utiliser l’import assisté avec l’URL originale. La collecte planifiée lit les onglets déjà ouverts et signale les vérifications qui nécessitent une action humaine.
 
----
+## Vercel et GitHub Actions
 
-## 5. Secrets d'authentification et de sécurité
+Importer le dépôt `fabienlufbery-hue/job-hunter-agent-for-fabien-lufbery` et réutiliser le projet s’il existe. Configurer la production avec la région européenne indiquée dans `vercel.json` et les variables pertinentes de `.env.example`. Utiliser des valeurs aléatoires distinctes pour `AUTH_SECRET`, `CRON_SECRET`, `EXTENSION_INGEST_TOKEN` et `TOKEN_ENCRYPTION_KEY`. Définir `NEXT_PUBLIC_APP_URL` à l’origine réelle de production et protéger le compte administrateur par un mot de passe fort ou un hachage scrypt.
 
-Générez trois secrets aléatoires robustes dans un terminal :
-
-```bash
-openssl rand -hex 32   # -> AUTH_SECRET
-openssl rand -hex 24   # -> EXTENSION_INGEST_TOKEN
-openssl rand -hex 24   # -> CRON_SECRET
-```
-
-Configurez également :
-- `ADMIN_EMAIL` : votre email de connexion personnelle
-- `ADMIN_PASSWORD` : votre mot de passe personnel fort
-
----
-
-## 6. Déploiement Vercel & Automatisation GitHub Actions
-
-1. Connectez-vous sur [https://vercel.com](https://vercel.com) → **Add New Project** → importez `fabienlufbery-hue/job-hunter-agent-for-fabien-lufbery`.
-2. Vérifiez que le nom du projet est **`job-hunter-agent-for-fabien-lufbery`**.
-3. Ajoutez toutes les variables d'environnement dans *Settings → Environment Variables* puis lancez **Deploy**.
-4. Dans GitHub → *Repository Settings → Secrets and variables → Actions*, ajoutez :
-   - `APP_URL` = `https://job-hunter-agent-for-fabien-lufbery.vercel.app`
-   - `CRON_SECRET` = la même valeur que sur Vercel
-5. Activez les workflows GitHub Actions (le jeton OAuth `gh` requiert le scope `workflow`) :
-   ```bash
-   gh auth refresh -s workflow
-   mkdir -p .github/workflows
-   cp automation/github-workflows/*.yml .github/workflows/
-   git add .github/workflows && git commit -m "ci: enable GitHub Actions workflows" && git push
-   ```
-   Le workflow synchronisera automatiquement France Travail et scorera les nouvelles offres chaque jour à **09h00** et **18h00 (Europe/Paris)**.
+Les workflows se trouvent dans `.github/workflows`. Configurer la variable Actions `APP_URL` et le secret `CRON_SECRET` identique à celui de Vercel. Déclencher **Daily Job Sync** manuellement une fois. Comparer son `runId` et ses compteurs au journal de l’application. Les déclenchements planifiés sont à 09h00 et 18h00 **Europe/Paris**. Le serveur ignore un créneau déjà exécuté. Un échec complet est signalé dans Actions et dans l’historique. [Syntaxe GitHub Actions](https://docs.github.com/actions/reference/workflows-and-actions/workflow-syntax#onschedule)

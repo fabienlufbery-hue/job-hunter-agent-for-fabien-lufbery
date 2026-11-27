@@ -25,17 +25,13 @@
     $('alertBox').className = 'alert hidden';
   }
 
-  function detectPlatformFromUrl(url) {
-    try {
-      const host = new URL(url).hostname.toLowerCase();
-      if (host.includes('welcometothejungle.com')) return 'welcome_to_the_jungle';
-      if (host.includes('indeed.com')) return 'indeed';
-      if (host.includes('hellowork.com')) return 'hellowork';
-      if (host.includes('meteojob.com')) return 'meteojob';
-      return null;
-    } catch {
-      return null;
-    }
+  const detectPlatformFromUrl = globalThis.JobHunterCommon.detectPlatform;
+  const authorizedSources = [...document.querySelectorAll('[name="authorizedSource"]')];
+
+  function updateCollectionControls() {
+    $('scanBtn').disabled = !authorizedSources.some(
+      (source) => source.checked && source.value === detectedPlatform
+    );
   }
 
   function formatDate(iso) {
@@ -112,11 +108,13 @@
       'lastSyncAt',
       'totalImported',
       'lastError',
+      'authorizedSources',
+      'scheduleStatus',
     ]);
 
     const backendUrl = stored.backendUrl || 'http://localhost:3000';
     $('backendUrl').value = backendUrl;
-    $('ingestToken').value = stored.ingestToken || 'dev-extension-token';
+    $('ingestToken').value = stored.ingestToken || (backendUrl === 'http://localhost:3000' ? 'dev-extension-token' : '');
     $('lastSync').textContent = formatDate(stored.lastSyncAt);
     $('totalImported').textContent = String(stored.totalImported || 0);
 
@@ -137,8 +135,17 @@
       ? PLATFORM_LABELS[detectedPlatform]
       : 'Hors plateforme cible';
 
-    if (!detectedPlatform) {
-      $('scanBtn').disabled = true;
+    for (const source of authorizedSources) {
+      source.checked = (stored.authorizedSources || []).includes(source.value);
+    }
+    $('scheduleStatus').textContent = stored.scheduleStatus || 'Aucune collecte planifiée exécutée.';
+    updateCollectionControls();
+    if (detectedPlatform) $('manualUrl').value = activeTab.url;
+    if (!$('scanBtn').disabled) {
+      hideAlert();
+    } else if (detectedPlatform) {
+      showAlert('info', 'Autorisation de lecture requise. Le formulaire d’importation assistée reste disponible.');
+    } else {
       showAlert(
         'info',
         'Ouvrez une page Welcome to the Jungle, Indeed, HelloWork ou Meteojob pour collecter les offres.'
@@ -157,20 +164,46 @@
 
   $('saveCfgBtn').addEventListener('click', async () => {
     hideAlert();
-    const backendUrl = $('backendUrl').value.trim().replace(/\/+$/, '');
     const ingestToken = $('ingestToken').value.trim();
-    if (!backendUrl) {
-      showAlert('err', 'Renseignez une URL backend valide.');
+    let url;
+    try {
+      url = new URL($('backendUrl').value.trim());
+      const local = url.origin === 'http://localhost:3000';
+      if ((!local && url.protocol !== 'https:') || url.username || url.password ||
+          url.pathname !== '/' || url.search || url.hash) throw new Error();
+      if (!local && !ingestToken) {
+        showAlert('err', 'Renseignez le token de synchronisation de ce serveur HTTPS.');
+        return;
+      }
+      if (!local && url.origin !== 'https://job-hunter-agent-for-fabien-lufbery.vercel.app' &&
+          !await chrome.permissions.request({ origins: [`${url.origin}/*`] })) {
+        showAlert('err', 'Autorisez l’accès à cette adresse pour connecter l’extension.');
+        return;
+      }
+    } catch {
+      showAlert('err', 'Saisissez une origine HTTPS ou http://localhost:3000.');
       return;
     }
-    await chrome.storage.local.set({ backendUrl, ingestToken });
+    await chrome.storage.local.set({ backendUrl: url.origin, ingestToken });
     showAlert('info', 'Configuration enregistrée. Vérification de la connexion...');
     await refreshConnectionStatus();
   });
 
+  for (const source of authorizedSources) {
+    source.addEventListener('change', async () => {
+      updateCollectionControls();
+      extractedJobs = [];
+      renderPreview([]);
+      await chrome.storage.local.set({
+        authorizedSources: authorizedSources.filter((entry) => entry.checked).map((entry) => entry.value),
+      });
+      hideAlert();
+    });
+  }
+
   $('scanBtn').addEventListener('click', async () => {
     hideAlert();
-    if (!activeTab || !activeTab.id) return;
+    if (!activeTab?.id || $('scanBtn').disabled) return;
 
     try {
       const res = await chrome.tabs.sendMessage(activeTab.id, { type: 'EXTRACT_JOBS' });
@@ -182,7 +215,7 @@
         return;
       }
 
-      extractedJobs = Array.isArray(res.jobs) ? res.jobs : [];
+      extractedJobs = res.ok && !res.humanActionRequired && Array.isArray(res.jobs) ? res.jobs : [];
       renderPreview(extractedJobs);
 
       if (res.humanActionRequired) {
@@ -233,7 +266,12 @@
       showAlert('err', 'L’intitulé du poste est obligatoire pour l’importation assistée.');
       return;
     }
-    const source = detectedPlatform || 'indeed';
+    const originalUrl = $('manualUrl').value.trim();
+    const source = detectPlatformFromUrl(originalUrl);
+    if (!source) {
+      showAlert('err', 'Renseignez l’URL originale depuis l’une des quatre plateformes.');
+      return;
+    }
     const job = {
       title,
       company: $('manualCompany').value.trim() || null,
@@ -241,7 +279,7 @@
       contractType: $('manualContract').value.trim() || null,
       description: $('manualDesc').value.trim(),
       skills: [],
-      originalUrl: (activeTab && activeTab.url) || 'https://www.welcometothejungle.com',
+      originalUrl,
       source,
     };
 

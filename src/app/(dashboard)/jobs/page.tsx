@@ -84,19 +84,17 @@ export default function JobMatchesPage() {
   const [ftDept, setFtDept] = useState('75');
   const [ftContract, setFtContract] = useState('CDI');
 
-  const loadJobs = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (q) params.set('q', q);
-      if (source !== 'all') params.set('source', source);
-      if (location) params.set('location', location);
-      if (contract !== 'all') params.set('contract', contract);
-      if (minScore !== '0') params.set('minScore', minScore);
-      if (favoritesOnly) params.set('favorites', 'true');
-      params.set('sort', sortBy);
+  const loadJobs = useCallback((signal?: AbortSignal) => {
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    if (source !== 'all') params.set('source', source);
+    if (location) params.set('location', location);
+    if (contract !== 'all') params.set('contract', contract);
+    if (minScore !== '0') params.set('minScore', minScore);
+    if (favoritesOnly) params.set('favorites', 'true');
+    params.set('sort', sortBy);
 
-      const res = await fetch(`/api/jobs?${params.toString()}`);
+    return fetch(`/api/jobs?${params.toString()}`, { signal }).then(async (res) => {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Erreur chargement offres');
       setJobs(data.jobs || []);
@@ -106,15 +104,17 @@ export default function JobMatchesPage() {
           ? prev
           : data.jobs?.[0]?.id || null
       );
-    } catch (err) {
-      setFeedback({ kind: 'err', text: err instanceof Error ? err.message : 'Erreur réseau' });
-    } finally {
-      setLoading(false);
-    }
+    }).catch((err) => {
+      if (!signal?.aborted) setFeedback({ kind: 'err', text: err instanceof Error ? err.message : 'Erreur réseau' });
+    }).finally(() => {
+      if (!signal?.aborted) setLoading(false);
+    });
   }, [q, source, location, contract, minScore, favoritesOnly, sortBy]);
 
   useEffect(() => {
-    loadJobs();
+    const controller = new AbortController();
+    void loadJobs(controller.signal);
+    return () => controller.abort();
   }, [loadJobs]);
 
   const selected = jobs.find((j) => j.id === selectedId) || null;
@@ -227,7 +227,7 @@ export default function JobMatchesPage() {
               <RefreshCw className="h-3.5 w-3.5" />
               Recherche France Travail API
             </Button>
-            <Button variant="secondary" size="sm" onClick={loadJobs} disabled={loading}>
+            <Button variant="secondary" size="sm" onClick={() => void loadJobs()} disabled={loading}>
               Actualiser
             </Button>
           </>

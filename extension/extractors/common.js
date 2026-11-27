@@ -6,12 +6,16 @@
 
   function detectPlatform(urlString) {
     try {
-      const host = new URL(urlString).hostname.toLowerCase();
-      if (host.includes('welcometothejungle.com')) return 'welcome_to_the_jungle';
-      if (host.includes('indeed.com')) return 'indeed';
-      if (host.includes('hellowork.com')) return 'hellowork';
-      if (host.includes('meteojob.com')) return 'meteojob';
-      return null;
+      const url = new URL(urlString);
+      if (url.protocol !== 'https:') return null;
+      const hosts = {
+        'www.welcometothejungle.com': 'welcome_to_the_jungle',
+        'fr.indeed.com': 'indeed',
+        'www.indeed.com': 'indeed',
+        'www.hellowork.com': 'hellowork',
+        'www.meteojob.com': 'meteojob',
+      };
+      return Object.hasOwn(hosts, url.hostname) ? hosts[url.hostname] : null;
     } catch {
       return null;
     }

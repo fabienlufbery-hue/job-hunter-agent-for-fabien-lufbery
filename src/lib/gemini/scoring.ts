@@ -74,7 +74,8 @@ export function buildScoringPrompt(input: ScoreJobInput): {
   userPrompt: string;
   injectionFlags: string[];
 } {
-  const safeCvJson = sanitizeUntrustedForPrompt(JSON.stringify(input.cv, null, 2), 14000);
+  const cv = { ...input.cv, fullName: undefined };
+  const safeCvJson = sanitizeUntrustedForPrompt(JSON.stringify(cv, null, 2), 14000);
   const safeJobJson = sanitizeUntrustedForPrompt(JSON.stringify(input.job, null, 2), 14000);
 
   const injectionFlags = [
@@ -134,7 +135,8 @@ export async function scoreJobWithGemini(
       model,
       contents: userPrompt,
       config: {
-        temperature: 0.2,
+        store: false,
+        httpOptions: { timeout: 20_000 },
         systemInstruction,
         responseMimeType: 'application/json',
         responseSchema: {

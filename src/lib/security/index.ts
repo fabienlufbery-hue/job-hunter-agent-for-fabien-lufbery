@@ -70,7 +70,7 @@ export function detectPromptInjectionPatterns(input: string): string[] {
 export function isValidHttpUrl(rawUrl: string): boolean {
   try {
     const parsed = new URL(rawUrl);
-    return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+    return !parsed.username && !parsed.password && ['https:', 'http:'].includes(parsed.protocol);
   } catch {
     return false;
   }

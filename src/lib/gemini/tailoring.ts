@@ -72,7 +72,8 @@ ${safeJobJson}
       model,
       contents: userPrompt,
       config: {
-        temperature: 0.35,
+        store: false,
+        httpOptions: { timeout: 20_000 },
         systemInstruction,
         responseMimeType: 'application/json',
         responseSchema: {
