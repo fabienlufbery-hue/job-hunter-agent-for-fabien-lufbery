@@ -22,7 +22,7 @@ export interface IntegrationStatusItem {
   category: 'ai' | 'job_board' | 'email' | 'browser' | 'infrastructure';
   status: IntegrationState;
   statusLabel: string;
-  mode: 'server_api' | 'browser_extension' | 'oauth2' | 'database';
+  mode: 'server_api' | 'browser_extension' | 'oauth2' | 'database' | 'manual';
   detail: string;
   lastActivityAt?: string | null;
   metrics?: Record<string, string | number | boolean | null>;
@@ -211,11 +211,17 @@ export async function getAllIntegrationsStatus(options?: {
         lastPlatform: heartbeat?.lastPlatform || null,
       },
     },
-    makeBoardItem(
-      'welcome_to_the_jungle',
-      'Welcome to the Jungle',
-      'Collecte DOM/JSON-LD via Extension Chrome MV3 sans cookies ni contournement.'
-    ),
+    {
+      id: 'welcome_to_the_jungle',
+      name: 'Welcome to the Jungle',
+      category: 'job_board',
+      status: dbHealth.connected ? 'configured_unverified' : 'error',
+      statusLabel: dbHealth.connected ? 'Import assisté disponible' : 'Base de données indisponible',
+      mode: 'manual',
+      detail: `Enregistrez le lien et vos propres notes dans Job Matches. Pas de connexion directe au compte ni de collecte automatisée. (${countsBySource.welcome_to_the_jungle || 0} offre(s) en base).`,
+      lastActivityAt: lastCollectedBySource.welcome_to_the_jungle || null,
+      metrics: { importedCount: countsBySource.welcome_to_the_jungle || 0, requiresBrowser: false },
+    },
     makeBoardItem(
       'indeed',
       'Indeed',

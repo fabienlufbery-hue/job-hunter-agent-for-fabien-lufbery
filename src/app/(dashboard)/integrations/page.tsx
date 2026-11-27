@@ -156,6 +156,12 @@ export default function IntegrationsPage() {
                   )
                 )}
 
+                {item.id === 'welcome_to_the_jungle' && (
+                  <Link href="/jobs" className="inline-flex items-center gap-1 text-cyan-300 hover:underline">
+                    Importer une offre <ExternalLink className="h-3 w-3" />
+                  </Link>
+                )}
+
                 {(item.id === 'france_travail' || item.id === 'gemini') && (
                   <Link
                     href="/settings"
