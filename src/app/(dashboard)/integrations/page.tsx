@@ -8,10 +8,10 @@ export default function IntegrationsPage() {
   const [items, setItems] = useState<Item[]>([]);
   const [error, setError] = useState('');
   function load() {
-    setError('');
     fetch('/api/integrations/status').then(async res => {
       if (!res.ok) throw new Error('Erreur chargement intégrations');
       setItems((await res.json()).integrations);
+      setError('');
     }).catch(() => setError('Impossible de charger les intégrations.'));
   }
   useEffect(() => { load(); }, []);
