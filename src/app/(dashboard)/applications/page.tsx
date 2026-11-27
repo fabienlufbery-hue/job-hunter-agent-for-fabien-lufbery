@@ -4,7 +4,6 @@ import React, { useEffect, useState } from 'react';
 import {
   FileDown,
   Mail,
-  Send,
   Save,
   ExternalLink,
   CheckCircle2,
@@ -83,8 +82,6 @@ export default function ApplicationsPage() {
   const [emailSubject, setEmailSubject] = useState('');
   const [emailBody, setEmailBody] = useState('');
   const [recipientEmail, setRecipientEmail] = useState('');
-  const [attachPdf, setAttachPdf] = useState(true);
-  const [humanConfirmed, setHumanConfirmed] = useState(false);
 
   const [busy, setBusy] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
@@ -123,7 +120,6 @@ export default function ApplicationsPage() {
     setEmailSubject(selected?.emailSubject ?? '');
     setEmailBody(selected?.emailBody ?? '');
     setRecipientEmail(selected?.recipientEmail ?? '');
-    setHumanConfirmed(false);
   }
 
   async function handleSaveEdits() {
@@ -153,71 +149,11 @@ export default function ApplicationsPage() {
     }
   }
 
-  async function handleCreateGmailDraft() {
-    if (!selected) return;
-    setBusy('draft');
-    setFeedback(null);
-    try {
-      const res = await fetch(`/api/applications/${selected.id}/gmail/draft`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          to: recipientEmail,
-          subject: emailSubject,
-          body: emailBody,
-          attachCoverLetterPdf: attachPdf,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Échec création brouillon Gmail');
-      setFeedback({
-        kind: 'ok',
-        text: `Brouillon Gmail créé avec succès (ID : ${data.draftId}). Vérifiez-le avant tout envoi.`,
-      });
-      await loadApps();
-    } catch (err) {
-      setFeedback({ kind: 'err', text: err instanceof Error ? err.message : 'Erreur Gmail' });
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function handleSendGmail() {
-    if (!selected || !humanConfirmed) return;
-    setBusy('send');
-    setFeedback(null);
-    try {
-      const res = await fetch(`/api/applications/${selected.id}/gmail/send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          to: recipientEmail,
-          subject: emailSubject,
-          body: emailBody,
-          humanConfirmed: true,
-          attachCoverLetterPdf: attachPdf,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Échec envoi Gmail');
-      setFeedback({
-        kind: 'ok',
-        text: `Email envoyé via Gmail après votre confirmation (Message ID : ${data.messageId}).`,
-      });
-      setHumanConfirmed(false);
-      await loadApps();
-    } catch (err) {
-      setFeedback({ kind: 'err', text: err instanceof Error ? err.message : 'Erreur envoi' });
-    } finally {
-      setBusy(null);
-    }
-  }
-
   return (
     <div className="space-y-5">
       <SectionHeader
-        title="Applications — Studio de candidature & Gmail"
-        subtitle="Éditez votre lettre de motivation côte à côte avec l’offre, exportez en PDF/DOCX et validez manuellement chaque envoi Gmail."
+        title="Applications — Studio de candidature"
+        subtitle="Éditez votre lettre de motivation côte à côte avec l’offre, exportez en PDF/DOCX et préparez vos candidatures."
       />
 
       {feedback && (
@@ -330,7 +266,7 @@ export default function ApplicationsPage() {
                   { id: 'letter', label: 'Lettre côte à côte', icon: FileText },
                   { id: 'presentation', label: 'Page de présentation', icon: Sparkles },
                   { id: 'cv_tips', label: 'Suggestions CV & ATS', icon: CheckCircle2 },
-                  { id: 'gmail', label: 'Mail & Validation Gmail', icon: Mail },
+                  { id: 'gmail', label: 'Brouillon de mail', icon: Mail },
                 ].map((tab) => {
                   const Icon = tab.icon;
                   const isActive = activeTab === tab.id;
@@ -515,85 +451,18 @@ export default function ApplicationsPage() {
                       />
                     </div>
 
-                    <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={attachPdf}
-                        onChange={(e) => setAttachPdf(e.target.checked)}
-                        className="rounded border-white/20 bg-slate-900"
-                      />
-                      Joindre automatiquement la lettre de motivation &amp; présentation en PDF
-                    </label>
                   </div>
-
-                  {/* Human Validation Box */}
+                  {/* Manual submission */}
                   <div className="lg:col-span-5 space-y-4">
                     <div className="rounded-xl border border-indigo-400/30 bg-indigo-500/[0.08] p-4 space-y-3">
                       <div className="flex items-center gap-2 text-sm font-semibold text-white">
                         <ShieldCheck className="h-4 w-4 text-emerald-400" />
                         Validation humaine obligatoire
                       </div>
-                      <p className="text-xs leading-relaxed text-slate-300">
-                        Aucun email n’est jamais envoyé automatiquement. Préparez d’abord un
-                        brouillon dans Gmail, ou cochez la confirmation ci-dessous après relecture
-                        complète du destinataire, de l’objet et des pièces jointes.
-                      </p>
-
-                      <Button
-                        variant="secondary"
-                        className="w-full"
-                        onClick={handleCreateGmailDraft}
-                        disabled={isDemo || !recipientEmail.trim() || busy === 'draft'}
-                      >
-                        <Mail className="h-4 w-4" />
-                        {busy === 'draft'
-                          ? 'Création du brouillon...'
-                          : 'Créer un brouillon Gmail'}
-                      </Button>
-
-                      <div className="border-t border-white/10 pt-3 space-y-3">
-                        <label className="flex items-start gap-2.5 text-xs text-slate-200 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={humanConfirmed}
-                            onChange={(e) => setHumanConfirmed(e.target.checked)}
-                            disabled={isDemo}
-                            className="mt-0.5 rounded border-white/20 bg-slate-900"
-                          />
-                          <span>
-                            Je confirme avoir vérifié l’adresse destinataire (
-                            <strong className="text-cyan-300">
-                              {recipientEmail.trim() || 'non renseignée'}
-                            </strong>
-                            ), le contenu du message et les pièces jointes, et j’autorise l’envoi
-                            réel via Gmail.
-                          </span>
-                        </label>
-
-                        <Button
-                          variant="emerald"
-                          className="w-full"
-                          onClick={handleSendGmail}
-                          disabled={
-                            isDemo ||
-                            !humanConfirmed ||
-                            !recipientEmail.trim() ||
-                            busy === 'send'
-                          }
-                        >
-                          <Send className="h-4 w-4" />
-                          {busy === 'send'
-                            ? 'Envoi via Gmail...'
-                            : 'Confirmer et envoyer via Gmail'}
-                        </Button>
-                      </div>
+                      <p className="text-xs leading-relaxed text-slate-300">L’envoi est manuel. Copiez votre brouillon dans votre messagerie ou candidatez depuis l’offre originale.</p>
+                      <Button variant="secondary" className="w-full" disabled={isDemo} onClick={() => void navigator.clipboard.writeText(emailSubject + '\n\n' + emailBody)}>Copier le brouillon</Button>
+                      <a href={selected.originalUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-cyan-300">Ouvrir l’offre originale</a>
                     </div>
-
-                    {selected.gmailDraftId && (
-                      <div className="text-xs text-cyan-200 rounded-xl border border-cyan-500/25 bg-cyan-500/10 p-3">
-                        Brouillon Gmail lié : <code className="font-mono">{selected.gmailDraftId}</code>
-                      </div>
-                    )}
                     {selected.sentAt && (
                       <div className="text-xs text-emerald-200 rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-3">
                         Candidature envoyée le {formatFrDate(selected.sentAt)}
@@ -608,7 +477,7 @@ export default function ApplicationsPage() {
           {/* Email History */}
           <GlassCard className="space-y-3">
             <h3 className="text-sm font-semibold text-white">
-              Historique des brouillons et envois Gmail ({emailLogs.length})
+              Historique des anciens envois ({emailLogs.length})
             </h3>
             {emailLogs.length === 0 ? (
               <p className="text-xs text-slate-400">

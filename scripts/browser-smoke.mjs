@@ -62,11 +62,11 @@ try {
     }
 
     await page.goto('/applications');
-    await page.getByRole('button', { name: 'Mail & Validation Gmail' }).click();
-    assert.equal(await page.getByRole('button', { name: 'Confirmer et envoyer via Gmail' }).isEnabled(), false);
+    await page.getByRole('button', { name: 'Brouillon de mail' }).click();
+    assert.equal(await page.getByRole('button', { name: 'Copier le brouillon' }).isEnabled(), false);
     await page.screenshot({ path: `browser-evidence/${device}-gmail.png`, fullPage: true });
     assert.deepEqual(pageErrors, [], `Unexpected error on ${device}`);
-    console.log(`PASS ${device.padEnd(7)} mode démo sans accès aux mutations, envoi Gmail désactivé`);
+    console.log(`PASS ${device.padEnd(7)} mode démo sans accès aux mutations, copie désactivée`);
     await context.close();
   }
 } finally {

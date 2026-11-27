@@ -50,15 +50,7 @@ export async function GET() {
       topJobs,
       lastSyncAt: DEMO_AUTOMATION_RUNS[0]?.finishedAt || null,
       nextScheduledRun,
-      sourcesStatus: integrations.filter((i) =>
-        [
-          'france_travail',
-          'welcome_to_the_jungle',
-          'indeed',
-          'hellowork',
-          'meteojob',
-        ].includes(i.id)
-      ),
+      sourcesStatus: integrations.filter((i) => i.id === 'apify'),
     });
   }
 
@@ -105,15 +97,7 @@ export async function GET() {
       topJobs,
       lastSyncAt: runs[0]?.finishedAt?.toISOString() || runs[0]?.startedAt?.toISOString() || null,
       nextScheduledRun,
-      sourcesStatus: integrations.filter((i) =>
-        [
-          'france_travail',
-          'welcome_to_the_jungle',
-          'indeed',
-          'hellowork',
-          'meteojob',
-        ].includes(i.id)
-      ),
+      sourcesStatus: integrations.filter((i) => i.id === 'apify'),
     });
   } catch (err) {
     return NextResponse.json(
