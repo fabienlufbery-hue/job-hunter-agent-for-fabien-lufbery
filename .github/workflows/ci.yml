@@ -45,7 +45,9 @@ jobs:
       - name: Verify the public demo on desktop and mobile
         shell: bash
         run: |
-          npm install --no-save --package-lock=false --no-audit --no-fund playwright@1.58.2
+          browser_deps="$RUNNER_TEMP/job-hunter-browser"
+          npm install --prefix "$browser_deps" --no-package-lock --no-audit --no-fund playwright@1.58.2
+          export PLAYWRIGHT_PACKAGE_ROOT="$browser_deps/package.json"
           AUTH_SECRET="$(openssl rand -hex 32)" npm run start -- --hostname 127.0.0.1 --port 3000 > "$RUNNER_TEMP/job-hunter-server.log" 2>&1 &
           server=$!
           trap 'kill "$server" 2>/dev/null || true' EXIT

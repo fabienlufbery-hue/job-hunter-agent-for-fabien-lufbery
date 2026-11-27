@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
-import { chromium } from 'playwright';
+import { createRequire } from 'node:module';
 
-const baseURL = 'http://127.0.0.1:3000';
+const require = createRequire(process.env.PLAYWRIGHT_PACKAGE_ROOT || import.meta.url);
+const { chromium } = require('playwright');
+
+const baseURL = "http://localhost:3000";
 const pages = [
   ['overview', '/', /^Overview — Job Hunter Agent for Fabien Lufbery$/, '/api/overview'],
   ['jobs', '/jobs', /^Job Matches$/, '/api/jobs'],
@@ -25,8 +28,11 @@ try {
     await page.screenshot({ path: `browser-evidence/${device}-login.png`, fullPage: true });
     await page.getByRole('button', { name: /^Explorer le Mode Démonstration/ }).click();
     await page.waitForURL(baseURL + '/');
-    assert.equal((await context.request.get('/api/auth/session')).status(), 200);
-    assert.equal((await context.request.delete('/api/cv')).status(), 403);
+    await page.getByText(/MODE DÉMONSTRATION PUBLIC/).waitFor();
+    const session = await page.evaluate(async () => (await fetch('/api/auth/session')).json());
+    assert.equal(session.session?.role, 'demo');
+    const writeStatus = await page.evaluate(async () => (await fetch('/api/cv', { method: 'DELETE' })).status);
+    assert.equal(writeStatus, 403);
 
     for (const [name, path, heading, endpoint] of pages) {
       const [response] = await Promise.all([
