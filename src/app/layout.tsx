@@ -4,7 +4,7 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'Job Hunter Agent for Fabien Lufbery',
   description:
-    'Assistant autonome de recherche d’emploi, scoring IA Gemini, personnalisation de candidatures, API France Travail v2, Extension Chrome MV3 et intégration Gmail OAuth2 — Job Hunter Agent for Fabien Lufbery.',
+    'Assistant autonome de recherche d’emploi propulsé par Apify API v2, Google Gemini AI et PostgreSQL/Neon — Job Hunter Agent for Fabien Lufbery.',
   applicationName: 'Job Hunter Agent for Fabien Lufbery',
   authors: [{ name: 'Fabien Lufbery' }],
 };

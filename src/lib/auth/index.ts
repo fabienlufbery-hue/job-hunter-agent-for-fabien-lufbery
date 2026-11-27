@@ -87,7 +87,6 @@ export function verifyOwnerCredentials(email: string, password: string): boolean
   const hash = process.env.ADMIN_PASSWORD_HASH?.trim();
   const plain = process.env.ADMIN_PASSWORD?.trim();
 
-  // In local dev without env vars configured, allow explicit local default ONLY when not on Vercel/production
   if (!expectedEmail || (!hash && !plain)) {
     if (process.env.NODE_ENV !== 'production' && process.env.VERCEL !== '1') {
       return (
@@ -139,10 +138,6 @@ export function clearSessionCookie(response: NextResponse): NextResponse {
   return response;
 }
 
-/**
- * Guard for routes accessible by authenticated owner OR demo mode (returns session).
- * Returns 401 JSON response if neither authenticated nor in Demo Mode.
- */
 export async function requireSessionOrDemo(): Promise<
   { ok: true; session: SessionPayload; isDemo: boolean } | { ok: false; response: NextResponse }
 > {
@@ -162,9 +157,6 @@ export async function requireSessionOrDemo(): Promise<
   return { ok: true, session, isDemo: session.role === 'demo' };
 }
 
-/**
- * Strict guard for private owner-only actions (CV upload/edit, real DB mutations, Gmail send, external API calls).
- */
 export async function requireOwnerSession(): Promise<
   { ok: true; session: SessionPayload } | { ok: false; response: NextResponse }
 > {
@@ -194,43 +186,6 @@ export async function requireOwnerSession(): Promise<
   return { ok: true, session };
 }
 
-/**
- * Verifies Chrome Extension ingest Bearer token or X-Extension-Token header.
- */
-export function verifyExtensionToken(request: Request): { valid: boolean; reason?: string } {
-  const configured = process.env.EXTENSION_INGEST_TOKEN?.trim();
-  const authHeader = request.headers.get('authorization');
-  const bearer = authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
-  const headerToken = request.headers.get('x-extension-token')?.trim() || bearer;
-
-  if (!configured) {
-    if (process.env.NODE_ENV !== 'production' && process.env.VERCEL !== '1') {
-      if (headerToken && safeEqual(headerToken, 'dev-extension-token')) {
-        return { valid: true };
-      }
-      return {
-        valid: false,
-        reason:
-          'EXTENSION_INGEST_TOKEN non défini. Utilisez dev-extension-token en local ou configurez EXTENSION_INGEST_TOKEN.',
-      };
-    }
-    return { valid: false, reason: 'EXTENSION_INGEST_TOKEN non configuré côté serveur.' };
-  }
-
-  if (!headerToken) {
-    return { valid: false, reason: 'En-tête X-Extension-Token ou Authorization Bearer manquant.' };
-  }
-
-  if (!safeEqual(headerToken, configured)) {
-    return { valid: false, reason: 'Token d’extension invalide.' };
-  }
-
-  return { valid: true };
-}
-
-/**
- * Verifies CRON_SECRET for scheduled automation triggers.
- */
 export function verifyCronSecret(request: Request): { valid: boolean; reason?: string } {
   const configured = process.env.CRON_SECRET?.trim();
   const authHeader = request.headers.get('authorization');

@@ -166,7 +166,7 @@ export function DashboardShell({
                   Job Hunter Agent for Fabien Lufbery
                 </p>
                 <p className="hidden sm:block text-xs text-slate-400">
-                  Apify · Gemini AI
+                  Apify API v2 · Google Gemini AI · PostgreSQL / Neon
                 </p>
               </div>
             </div>

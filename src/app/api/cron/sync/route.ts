@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import { verifyCronSecret } from '@/lib/auth';
-import { isScheduledParisSlot, runServerAutomationSync } from '@/lib/automation/scheduler';
+import {
+  ConcurrentRunError,
+  isScheduledParisSlot,
+  runServerAutomationSync,
+} from '@/lib/automation/scheduler';
 
 export const maxDuration = 180;
 
@@ -23,24 +27,28 @@ async function handleCron(request: Request) {
     });
   }
 
-  const triggerType =
-    !force && slot.slotLabel !== 'off_slot'
-      ? slot.slotLabel
-      : 'manual';
+  const triggerType = !force && slot.slotLabel !== 'off_slot' ? slot.slotLabel : 'manual';
 
   try {
     const run = await runServerAutomationSync({
       triggerType,
       scheduledAt: force ? undefined : now,
-      maxOffers: 50,
-      autoScoreLimit: 15,
+      force,
     });
-    if (!run) return NextResponse.json({ ok: true, skipped: true, reason: 'Créneau déjà traité.' });
+    if (!run) {
+      return NextResponse.json({ ok: true, skipped: true, reason: 'Créneau déjà traité.' });
+    }
     return NextResponse.json(
       { ok: run.status !== 'failed', skipped: false, run },
       { status: run.status === 'failed' ? 503 : 200 }
     );
   } catch (err) {
+    if (err instanceof ConcurrentRunError) {
+      return NextResponse.json(
+        { ok: true, skipped: true, reason: err.message, activeRunId: err.activeRunId },
+        { status: 200 }
+      );
+    }
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Erreur exécution cron' },
       { status: 500 }

@@ -69,12 +69,12 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center p-4 sm:p-6">
       <div className="w-full max-w-4xl grid gap-6 lg:grid-cols-2 items-stretch">
-        {/* Brand & Academic Pitch Card */}
+        {/* Brand & Architecture Pitch Card */}
         <GlassCard className="flex flex-col justify-between p-7 lg:p-8 border-indigo-400/20">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-indigo-400/30 bg-indigo-500/15 px-3 py-1 text-xs font-semibold text-indigo-200">
               <Sparkles className="h-3.5 w-3.5 text-cyan-300" />
-              Antigravity Developer Challenge
+              Apify · Google Gemini · PostgreSQL/Neon
             </div>
 
             <h1 className="mt-5 text-3xl font-extrabold tracking-tight text-white leading-tight">
@@ -85,12 +85,13 @@ export default function LoginPage() {
             </h1>
 
             <p className="mt-4 text-sm leading-relaxed text-slate-300">
-              Assistant autonome de recherche d’emploi combinant l’API officielle{' '}
-              <strong className="text-white">France Travail v2</strong>, une{' '}
-              <strong className="text-white">Extension Chrome Manifest V3</strong> (Welcome to the
-              Jungle, Indeed, HelloWork, Meteojob), le scoring &amp; tailoring{' '}
-              <strong className="text-white">Google Gemini</strong> et la préparation sécurisée de
-              candidatures <strong className="text-white">Gmail OAuth2</strong>.
+              Assistant autonome cloud combinant{' '}
+              <strong className="text-white">Apify API v2</strong> (collecte automatisée
+              multi-plateformes : Welcome to the Jungle, LinkedIn, Indeed, HelloWork, Meteojob),{' '}
+              <strong className="text-white">Google Gemini</strong> (scoring sur 10, lettres de
+              motivation et adaptation CV) et{' '}
+              <strong className="text-white">PostgreSQL / Neon</strong> pour un fonctionnement
+              24h/24 à 09h00 et 18h00 (Europe/Paris).
             </p>
           </div>
 
@@ -98,11 +99,11 @@ export default function LoginPage() {
             <div className="rounded-xl border border-amber-400/25 bg-amber-500/10 p-4">
               <div className="flex items-center gap-2 text-xs font-semibold text-amber-200">
                 <FlaskConical className="h-4 w-4 shrink-0" />
-                Évaluation académique / Professeur
+                Visite publique / Évaluation
               </div>
               <p className="mt-1.5 text-xs leading-relaxed text-amber-100/85">
                 Consultez l’intégralité du tableau de bord avec des données 100 % fictives clairement
-                identifiées, sans accéder au CV privé ni aux emails personnels de Fabien Lufbery.
+                identifiées, sans accéder au CV privé ni aux clés API de Fabien Lufbery.
               </p>
               <Button
                 variant="secondary"
@@ -123,8 +124,8 @@ export default function LoginPage() {
             <div className="flex items-start gap-2.5 text-[11.5px] text-slate-400">
               <ShieldCheck className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
               <span>
-                Protection stricte : cookies de session signés HttpOnly, chiffrement AES-256-GCM des
-                tokens OAuth2, validation humaine obligatoire avant tout envoi Gmail.
+                Protection stricte : cookies de session signés HttpOnly, clés API uniquement côté
+                serveur, zéro donnée personnelle transmise à Apify, aucun envoi automatique.
               </span>
             </div>
           </div>
@@ -194,17 +195,18 @@ export default function LoginPage() {
               <p className="mt-1 text-cyan-200/80">
                 Configurez <code className="font-mono">ADMIN_EMAIL</code> et{' '}
                 <code className="font-mono">ADMIN_PASSWORD</code> dans{' '}
-                <code className="font-mono">.env.local</code>, ou utilisez les identifiants locaux
-                par défaut : <code className="font-mono">fabien.lufbery@local.dev</code> /{' '}
+                <code className="font-mono">.env.local</code>, ou utilisez :{' '}
+                <code className="font-mono">fabien.lufbery@local.dev</code> /{' '}
                 <code className="font-mono">local-dev-only</code>.
               </p>
             </div>
           )}
 
           <p className="mt-6 text-[11px] leading-relaxed text-slate-500">
-            En vous connectant et en lançant des analyses IA, vous êtes informé que le texte du
-            Master CV et les descriptions d’offres sélectionnées sont transmis côté serveur à l’API
-            Google Gemini pour le scoring et la rédaction assistée.
+            Confidentialité : seules vos préférences de recherche (sans nom ni CV) sont transmises à
+            Apify ; le texte anonymisé du Master CV et les offres sélectionnées sont envoyés à
+            Google Gemini (avec <code className="font-mono">store: false</code>) uniquement pour le
+            scoring et la rédaction assistée.
           </p>
         </GlassCard>
       </div>

@@ -35,7 +35,7 @@ describe('Job Normalization, Deduplication & PostgreSQL Persistence (PGlite)', (
     );
   });
 
-  it('persists offers from all 5 sources and deduplicates cross-platform preserving provenance', async () => {
+  it('persists offers from Apify multi-platform sources and deduplicates preserving provenance', async () => {
     const health = await checkDatabaseHealth();
     expect(health.connected).toBe(true);
 
@@ -52,7 +52,7 @@ describe('Job Normalization, Deduplication & PostgreSQL Persistence (PGlite)', (
         source: 'welcome_to_the_jungle',
       },
       {
-        externalId: 'ft-100',
+        externalId: 'li-100',
         title: 'Ingénieur Cloud Node.js',
         company: 'NovaCloud',
         location: 'Lyon',
@@ -60,8 +60,8 @@ describe('Job Normalization, Deduplication & PostgreSQL Persistence (PGlite)', (
         salary: '55 k€',
         description: 'API Node.js et PostgreSQL.',
         skills: ['Node.js', 'PostgreSQL'],
-        originalUrl: 'https://candidat.francetravail.fr/offres/recherche/detail/100',
-        source: 'france_travail',
+        originalUrl: 'https://www.linkedin.com/jobs/view/100',
+        source: 'linkedin',
       },
       {
         externalId: 'hw-1',
@@ -90,7 +90,7 @@ describe('Job Normalization, Deduplication & PostgreSQL Persistence (PGlite)', (
     expect(firstBatch.inserted).toBe(4);
     expect(firstBatch.duplicates).toBe(0);
 
-    // Second batch contains a cross-source duplicate of Helios Labs from Indeed with richer description & salary
+    // Cross-source duplicate of Helios Labs from Indeed with richer description & salary
     const secondBatch = await upsertNormalizedJobs([
       {
         externalId: 'indeed-dup-1',

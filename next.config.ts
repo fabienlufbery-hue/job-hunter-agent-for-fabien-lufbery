@@ -8,8 +8,6 @@ const nextConfig: NextConfig = {
     'mammoth',
     'pdf-lib',
     'docx',
-    'googleapis',
-    'nodemailer',
   ],
   async headers() {
     return [

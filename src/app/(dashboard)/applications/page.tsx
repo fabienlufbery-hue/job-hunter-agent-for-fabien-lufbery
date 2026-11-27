@@ -11,6 +11,9 @@ import {
   ShieldCheck,
   Sparkles,
   FileText,
+  Copy,
+  Check,
+  ClipboardList,
 } from 'lucide-react';
 import {
   Badge,
@@ -19,9 +22,14 @@ import {
   Input,
   ScoreBadge,
   SectionHeader,
+  Select,
   Textarea,
 } from '@/components/ui/primitives';
-import { formatFrDate, PLATFORM_DISPLAY } from '@/lib/utils';
+import {
+  APPLICATION_TRACKING_LABELS,
+  formatFrDate,
+  PLATFORM_DISPLAY,
+} from '@/lib/utils';
 
 interface ApplicationItem {
   id: string;
@@ -50,29 +58,17 @@ interface ApplicationItem {
   emailSubject: string;
   emailBody: string;
   recipientEmail: string | null;
-  gmailDraftId: string | null;
-  gmailMessageId: string | null;
+  notes: string | null;
   sentAt: string | null;
   updatedAt: string;
 }
 
-interface EmailLogItem {
-  id: string;
-  recipientEmail: string;
-  subject: string;
-  action: string;
-  humanConfirmed: boolean;
-  attachments: string[];
-  createdAt: string;
-}
-
 export default function ApplicationsPage() {
   const [apps, setApps] = useState<ApplicationItem[]>([]);
-  const [emailLogs, setEmailLogs] = useState<EmailLogItem[]>([]);
   const [isDemo, setIsDemo] = useState(false);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'letter' | 'presentation' | 'cv_tips' | 'gmail'>(
+  const [activeTab, setActiveTab] = useState<'letter' | 'presentation' | 'cv_tips' | 'message'>(
     'letter'
   );
 
@@ -82,28 +78,33 @@ export default function ApplicationsPage() {
   const [emailSubject, setEmailSubject] = useState('');
   const [emailBody, setEmailBody] = useState('');
   const [recipientEmail, setRecipientEmail] = useState('');
+  const [status, setStatus] = useState('ready');
+  const [notes, setNotes] = useState('');
 
+  const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
   function loadApps() {
-    return fetch('/api/applications').then(async (res) => {
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erreur chargement candidatures');
-      setApps(data.applications || []);
-      setEmailLogs(data.emailLogs || []);
-      setIsDemo(Boolean(data.isDemo));
-      const firstId = data.applications?.[0]?.id || null;
-      setSelectedId((prev) =>
-        prev && (data.applications || []).some((a: ApplicationItem) => a.id === prev)
-          ? prev
-          : firstId
-      );
-    }).catch((err) => {
-      setFeedback({ kind: 'err', text: err instanceof Error ? err.message : 'Erreur' });
-    }).finally(() => {
-      setLoading(false);
-    });
+    return fetch('/api/applications')
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erreur chargement candidatures');
+        setApps(data.applications || []);
+        setIsDemo(Boolean(data.isDemo));
+        const firstId = data.applications?.[0]?.id || null;
+        setSelectedId((prev) =>
+          prev && (data.applications || []).some((a: ApplicationItem) => a.id === prev)
+            ? prev
+            : firstId
+        );
+      })
+      .catch((err) => {
+        setFeedback({ kind: 'err', text: err instanceof Error ? err.message : 'Erreur' });
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   }
 
   useEffect(() => {
@@ -120,12 +121,15 @@ export default function ApplicationsPage() {
     setEmailSubject(selected?.emailSubject ?? '');
     setEmailBody(selected?.emailBody ?? '');
     setRecipientEmail(selected?.recipientEmail ?? '');
+    setStatus(selected?.status ?? 'ready');
+    setNotes(selected?.notes ?? '');
   }
 
-  async function handleSaveEdits() {
+  async function handleSaveEdits(overrideStatus?: string) {
     if (!selected) return;
     setBusy('save');
     setFeedback(null);
+    const nextStatus = overrideStatus ?? status;
     try {
       const res = await fetch(`/api/applications/${selected.id}`, {
         method: 'PATCH',
@@ -136,11 +140,17 @@ export default function ApplicationsPage() {
           emailSubject,
           emailBody,
           recipientEmail: recipientEmail.trim() || null,
+          notes: notes.trim() || null,
+          status: nextStatus,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Erreur sauvegarde');
-      setFeedback({ kind: 'ok', text: 'Modifications de la candidature enregistrées.' });
+      setStatus(nextStatus);
+      setFeedback({
+        kind: 'ok',
+        text: 'Candidature et statut manuel enregistrés dans PostgreSQL.',
+      });
       await loadApps();
     } catch (err) {
       setFeedback({ kind: 'err', text: err instanceof Error ? err.message : 'Erreur' });
@@ -149,11 +159,21 @@ export default function ApplicationsPage() {
     }
   }
 
+  async function copyDraftMessage() {
+    try {
+      await navigator.clipboard.writeText(`${emailSubject}\n\n${emailBody}`);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setFeedback({ kind: 'err', text: 'Impossible de copier dans le presse-papiers.' });
+    }
+  }
+
   return (
     <div className="space-y-5">
       <SectionHeader
-        title="Applications — Studio de candidature"
-        subtitle="Éditez votre lettre de motivation côte à côte avec l’offre, exportez en PDF/DOCX et préparez vos candidatures."
+        title="Applications — Studio de candidature & Suivi manuel"
+        subtitle="Éditez votre lettre côte à côte avec l’offre, adaptez votre CV, exportez en PDF/DOCX et suivez manuellement vos envois."
       />
 
       {feedback && (
@@ -191,6 +211,10 @@ export default function ApplicationsPage() {
           <div className="flex gap-3 overflow-x-auto pb-1">
             {apps.map((app) => {
               const active = app.id === selected?.id;
+              const badgeInfo = APPLICATION_TRACKING_LABELS[app.status] || {
+                label: app.status,
+                variant: 'default' as const,
+              };
               return (
                 <button
                   key={app.id}
@@ -203,17 +227,7 @@ export default function ApplicationsPage() {
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <Badge
-                      variant={
-                        app.status === 'sent'
-                          ? 'success'
-                          : app.status === 'gmail_draft'
-                            ? 'info'
-                            : 'violet'
-                      }
-                    >
-                      {app.status}
-                    </Badge>
+                    <Badge variant={badgeInfo.variant}>{badgeInfo.label}</Badge>
                     <ScoreBadge score={app.fitScore} />
                   </div>
                   <p className="mt-2 text-xs font-semibold text-white truncate">{app.jobTitle}</p>
@@ -252,7 +266,7 @@ export default function ApplicationsPage() {
                     </Button>
                   </a>
                   {!isDemo && (
-                    <Button size="sm" onClick={handleSaveEdits} disabled={busy === 'save'}>
+                    <Button size="sm" onClick={() => void handleSaveEdits()} disabled={busy === 'save'}>
                       <Save className="h-3.5 w-3.5" />
                       {busy === 'save' ? 'Sauvegarde...' : 'Enregistrer'}
                     </Button>
@@ -266,7 +280,7 @@ export default function ApplicationsPage() {
                   { id: 'letter', label: 'Lettre côte à côte', icon: FileText },
                   { id: 'presentation', label: 'Page de présentation', icon: Sparkles },
                   { id: 'cv_tips', label: 'Suggestions CV & ATS', icon: CheckCircle2 },
-                  { id: 'gmail', label: 'Brouillon de mail', icon: Mail },
+                  { id: 'message', label: 'Message & Suivi manuel', icon: Mail },
                 ].map((tab) => {
                   const Icon = tab.icon;
                   const isActive = activeTab === tab.id;
@@ -362,7 +376,7 @@ export default function ApplicationsPage() {
                   <div className="grid gap-4 lg:grid-cols-2">
                     <div className="space-y-3">
                       <h3 className="text-sm font-semibold text-white">
-                        Suggestions d’adaptation du CV (sans ajout fictif)
+                        Suggestions d’adaptation du CV (zéro hallucination)
                       </h3>
                       {selected.cvSuggestions.map((s, idx) => (
                         <div
@@ -400,42 +414,14 @@ export default function ApplicationsPage() {
                 </div>
               )}
 
-              {/* Tab 4: Email Preview + Human-Confirmed Gmail Send */}
-              {activeTab === 'gmail' && (
+              {/* Tab 4: Application Message & Manual Tracking */}
+              {activeTab === 'message' && (
                 <div className="grid gap-5 lg:grid-cols-12">
                   <div className="lg:col-span-7 space-y-3.5">
-                    {!recipientEmail.trim() && (
-                      <div className="rounded-xl border border-amber-400/35 bg-amber-500/10 p-3.5 text-xs text-amber-100 flex flex-wrap items-center justify-between gap-2">
-                        <span>
-                          <strong>Aucune adresse email de recruteur vérifiée</strong> dans cette
-                          offre (nous n’inventons jamais d’adresse email). Ouvrez l’offre originale
-                          ou renseignez manuellement le destinataire ci-dessous.
-                        </span>
-                        <a
-                          href={selected.originalUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 underline font-semibold text-amber-200"
-                        >
-                          Ouvrir l’offre <ExternalLink className="h-3 w-3" />
-                        </a>
-                      </div>
-                    )}
-
                     <div>
                       <label className="text-xs text-slate-400 block mb-1">
-                        Destinataire (vérifié ou saisi manuellement)
+                        Objet du message de candidature
                       </label>
-                      <Input
-                        type="email"
-                        placeholder="prenom.nom@entreprise.fr"
-                        value={recipientEmail}
-                        onChange={(e) => setRecipientEmail(e.target.value)}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-xs text-slate-400 block mb-1">Objet du mail</label>
                       <Input
                         value={emailSubject}
                         onChange={(e) => setEmailSubject(e.target.value)}
@@ -443,7 +429,9 @@ export default function ApplicationsPage() {
                     </div>
 
                     <div>
-                      <label className="text-xs text-slate-400 block mb-1">Corps du mail</label>
+                      <label className="text-xs text-slate-400 block mb-1">
+                        Message professionnel prêt à envoyer
+                      </label>
                       <Textarea
                         rows={10}
                         value={emailBody}
@@ -451,21 +439,100 @@ export default function ApplicationsPage() {
                       />
                     </div>
 
+                    <div>
+                      <label className="text-xs text-slate-400 block mb-1">
+                        Contact / destinataire noté (optionnel)
+                      </label>
+                      <Input
+                        type="email"
+                        placeholder="contact@entreprise.fr (saisie manuelle)"
+                        value={recipientEmail}
+                        onChange={(e) => setRecipientEmail(e.target.value)}
+                      />
+                    </div>
                   </div>
-                  {/* Manual submission */}
+
+                  {/* Manual Tracking Panel */}
                   <div className="lg:col-span-5 space-y-4">
                     <div className="rounded-xl border border-indigo-400/30 bg-indigo-500/[0.08] p-4 space-y-3">
                       <div className="flex items-center gap-2 text-sm font-semibold text-white">
                         <ShieldCheck className="h-4 w-4 text-emerald-400" />
-                        Validation humaine obligatoire
+                        Contrôle humain intégral
                       </div>
-                      <p className="text-xs leading-relaxed text-slate-300">L’envoi est manuel. Copiez votre brouillon dans votre messagerie ou candidatez depuis l’offre originale.</p>
-                      <Button variant="secondary" className="w-full" disabled={isDemo} onClick={() => void navigator.clipboard.writeText(emailSubject + '\n\n' + emailBody)}>Copier le brouillon</Button>
-                      <a href={selected.originalUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-cyan-300">Ouvrir l’offre originale</a>
+                      <p className="text-xs leading-relaxed text-slate-300">
+                        Aucune candidature n’est jamais envoyée automatiquement. Copiez ce message
+                        ou téléchargez votre dossier PDF/DOCX, puis postulez directement sur le lien
+                        officiel de l’offre.
+                      </p>
+
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <Button
+                          variant="secondary"
+                          className="w-full"
+                          disabled={isDemo}
+                          onClick={copyDraftMessage}
+                        >
+                          {copied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
+                          {copied ? 'Copié' : 'Copier le message'}
+                        </Button>
+                        <a
+                          href={selected.originalUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-full"
+                        >
+                          <Button variant="primary" className="w-full" type="button">
+                            <ExternalLink className="h-4 w-4" />
+                            Postuler sur l’offre
+                          </Button>
+                        </a>
+                      </div>
+
+                      <div className="border-t border-white/10 pt-3 space-y-2.5">
+                        <label className="text-xs font-medium text-slate-200 block">
+                          Statut manuel de la candidature
+                        </label>
+                        <Select
+                          disabled={isDemo}
+                          value={status}
+                          onChange={(e) => setStatus(e.target.value)}
+                        >
+                          <option value="draft">Brouillon</option>
+                          <option value="ready">Prête à envoyer</option>
+                          <option value="applied">Candidature envoyée</option>
+                          <option value="interview">Entretien obtenu</option>
+                          <option value="offer">Offre reçue</option>
+                          <option value="rejected">Refusée / clôturée</option>
+                        </Select>
+
+                        <label className="text-xs text-slate-400 block">
+                          Notes de suivi (date de relance, interlocuteur...)
+                        </label>
+                        <Textarea
+                          rows={3}
+                          disabled={isDemo}
+                          value={notes}
+                          placeholder="Ex : Postulé sur WTTJ le 27/11, relance prévue J+7..."
+                          onChange={(e) => setNotes(e.target.value)}
+                        />
+
+                        {!isDemo && (
+                          <Button
+                            variant="emerald"
+                            className="w-full"
+                            onClick={() => void handleSaveEdits()}
+                            disabled={busy === 'save'}
+                          >
+                            <Save className="h-4 w-4" />
+                            Enregistrer le suivi manuel
+                          </Button>
+                        )}
+                      </div>
                     </div>
+
                     {selected.sentAt && (
                       <div className="text-xs text-emerald-200 rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-3">
-                        Candidature envoyée le {formatFrDate(selected.sentAt)}
+                        Marquée comme envoyée le {formatFrDate(selected.sentAt)}
                       </div>
                     )}
                   </div>
@@ -474,47 +541,63 @@ export default function ApplicationsPage() {
             </GlassCard>
           )}
 
-          {/* Email History */}
+          {/* Manual Tracking Table */}
           <GlassCard className="space-y-3">
-            <h3 className="text-sm font-semibold text-white">
-              Historique des anciens envois ({emailLogs.length})
-            </h3>
-            {emailLogs.length === 0 ? (
-              <p className="text-xs text-slate-400">
-                Aucun email ou brouillon enregistré pour le moment.
-              </p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="border-b border-white/[0.08] text-slate-400">
-                    <tr>
-                      <th className="py-2 pr-4">Date</th>
-                      <th className="py-2 pr-4">Action</th>
-                      <th className="py-2 pr-4">Destinataire</th>
-                      <th className="py-2 pr-4">Objet</th>
-                      <th className="py-2">Validation humaine</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/[0.06] text-slate-300">
-                    {emailLogs.map((log) => (
-                      <tr key={log.id}>
-                        <td className="py-2.5 pr-4 whitespace-nowrap">{formatFrDate(log.createdAt)}</td>
+            <div className="flex items-center gap-2">
+              <ClipboardList className="h-4 w-4 text-cyan-300" />
+              <h3 className="text-sm font-semibold text-white">
+                Tableau de suivi manuel des candidatures ({apps.length})
+              </h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="border-b border-white/[0.08] text-slate-400">
+                  <tr>
+                    <th className="py-2 pr-4">Poste &amp; Entreprise</th>
+                    <th className="py-2 pr-4">Plateforme</th>
+                    <th className="py-2 pr-4">Score IA</th>
+                    <th className="py-2 pr-4">Statut</th>
+                    <th className="py-2 pr-4">Notes</th>
+                    <th className="py-2">Mise à jour</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/[0.06] text-slate-300">
+                  {apps.map((app) => {
+                    const st = APPLICATION_TRACKING_LABELS[app.status] || {
+                      label: app.status,
+                      variant: 'default' as const,
+                    };
+                    return (
+                      <tr
+                        key={app.id}
+                        onClick={() => setSelectedId(app.id)}
+                        className="cursor-pointer hover:bg-white/[0.03]"
+                      >
                         <td className="py-2.5 pr-4">
-                          <Badge variant={log.action === 'sent' ? 'success' : 'info'}>
-                            {log.action}
-                          </Badge>
+                          <p className="font-medium text-white">{app.jobTitle}</p>
+                          <p className="text-[11px] text-slate-400">{app.company || '—'}</p>
                         </td>
-                        <td className="py-2.5 pr-4 font-mono">{log.recipientEmail}</td>
-                        <td className="py-2.5 pr-4">{log.subject}</td>
-                        <td className="py-2.5">
-                          {log.humanConfirmed ? 'Oui (confirmée)' : 'Brouillon'}
+                        <td className="py-2.5 pr-4">
+                          {PLATFORM_DISPLAY[app.source]?.short || app.source}
+                        </td>
+                        <td className="py-2.5 pr-4">
+                          <ScoreBadge score={app.fitScore} />
+                        </td>
+                        <td className="py-2.5 pr-4">
+                          <Badge variant={st.variant}>{st.label}</Badge>
+                        </td>
+                        <td className="py-2.5 pr-4 max-w-[220px] truncate text-slate-400">
+                          {app.notes || '—'}
+                        </td>
+                        <td className="py-2.5 whitespace-nowrap text-slate-400">
+                          {formatFrDate(app.updatedAt)}
                         </td>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </GlassCard>
         </>
       )}

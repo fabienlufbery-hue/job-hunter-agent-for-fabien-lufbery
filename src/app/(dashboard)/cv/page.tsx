@@ -495,29 +495,16 @@ export default function MyCvPage() {
                 />
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
-                  <label className="text-xs text-slate-400 block mb-1">Villes souhaitées</label>
-                  <Input
-                    disabled={isDemo}
-                    value={prefs.cities.join(', ')}
-                    placeholder="Paris, Lyon, Bordeaux"
-                    onChange={(e) => setPrefs({ ...prefs, cities: splitCsv(e.target.value) })}
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-slate-400 block mb-1">
-                    Départements France Travail
-                  </label>
-                  <Input
-                    disabled={isDemo}
-                    value={prefs.departmentCodes.join(', ')}
-                    placeholder="75, 92, 69"
-                    onChange={(e) =>
-                      setPrefs({ ...prefs, departmentCodes: splitCsv(e.target.value) })
-                    }
-                  />
-                </div>
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">
+                  Villes / localisations souhaitées (transmises à Apify sans données personnelles)
+                </label>
+                <Input
+                  disabled={isDemo}
+                  value={prefs.cities.join(', ')}
+                  placeholder="Paris, Lyon, Bordeaux, Remote France"
+                  onChange={(e) => setPrefs({ ...prefs, cities: splitCsv(e.target.value) })}
+                />
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">

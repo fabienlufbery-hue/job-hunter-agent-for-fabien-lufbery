@@ -1,10 +1,21 @@
 import { GoogleGenAI } from '@google/genai';
 
 export const DEFAULT_GEMINI_MODEL = 'gemini-3.5-flash-lite';
-export const ACADEMIC_ORIGINAL_MODEL = 'gemini-2.5-flash';
+export const RECOMMENDED_GEMINI_MODELS = [
+  {
+    id: 'gemini-3.5-flash-lite',
+    label: 'Gemini 3.5 Flash-Lite (Défaut — rapide & économique)',
+    status: 'Stable',
+  },
+  {
+    id: 'gemini-3.8-flash',
+    label: 'Gemini 3.8 Flash (Raisonnement avancé / agents)',
+    status: 'Stable',
+  },
+] as const;
 
-export const GEMINI_MODEL_DEPRECATION_NOTE =
-  'Le sujet académique demandait initialement gemini-2.5-flash. Google déprécie gemini-2.5-flash (accès restreint pour les nouveaux projets et routage automatique vers son successeur à partir du 1er décembre 2026). Le modèle recommandé par Google, gemini-3.5-flash-lite, est configuré par défaut via GEMINI_MODEL avec le SDK officiel @google/genai.';
+export const GEMINI_MODEL_INFO_NOTE =
+  'SDK officiel @google/genai (appels 100 % côté serveur, store: false). Modèles stables vérifiés (novembre 2026) : gemini-3.5-flash-lite par défaut (haute vitesse / faible coût) et gemini-3.8-flash. Modèle configurable via la variable GEMINI_MODEL.';
 
 export function isGeminiConfigured(): boolean {
   return Boolean(process.env.GEMINI_API_KEY?.trim());
@@ -83,7 +94,7 @@ export async function testGeminiConnection(): Promise<{
     const res = await client.models.generateContent({
       model,
       contents: 'Reply with OK only.',
-      config: { store: false, maxOutputTokens: 128, httpOptions: { timeout: 15_000 } },
+      config: { store: false, maxOutputTokens: 64, httpOptions: { timeout: 15_000 } },
     });
     return {
       configured: true,

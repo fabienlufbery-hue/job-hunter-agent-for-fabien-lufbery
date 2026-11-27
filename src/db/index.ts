@@ -38,6 +38,7 @@ function getState(): DbState {
   return globalForDb.__jobHunterDbState;
 }
 
+// Non-destructive, idempotent bootstrap preserving all existing personal data in Neon/PostgreSQL
 const BOOTSTRAP_STATEMENTS: string[] = [
   `CREATE TABLE IF NOT EXISTS master_cv (
     id TEXT PRIMARY KEY,
@@ -137,28 +138,14 @@ const BOOTSTRAP_STATEMENTS: string[] = [
     email_subject TEXT NOT NULL,
     email_body TEXT NOT NULL,
     recipient_email TEXT,
-    gmail_draft_id TEXT,
-    gmail_message_id TEXT,
+    notes TEXT,
     model_used TEXT,
     sent_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`,
+  `ALTER TABLE applications ADD COLUMN IF NOT EXISTS notes TEXT`,
   `CREATE INDEX IF NOT EXISTS applications_job_id_idx ON applications (job_id)`,
-  `CREATE TABLE IF NOT EXISTS email_logs (
-    id TEXT PRIMARY KEY,
-    application_id TEXT REFERENCES applications(id) ON DELETE SET NULL,
-    job_id TEXT REFERENCES jobs(id) ON DELETE SET NULL,
-    recipient_email TEXT NOT NULL,
-    subject TEXT NOT NULL,
-    action TEXT NOT NULL,
-    gmail_message_id TEXT,
-    gmail_draft_id TEXT,
-    attachments JSONB NOT NULL DEFAULT '[]'::jsonb,
-    human_confirmed BOOLEAN NOT NULL DEFAULT FALSE,
-    error_message TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  )`,
   `CREATE TABLE IF NOT EXISTS automation_runs (
     id TEXT PRIMARY KEY,
     trigger_type TEXT NOT NULL,
@@ -168,28 +155,73 @@ const BOOTSTRAP_STATEMENTS: string[] = [
     jobs_new INTEGER NOT NULL DEFAULT 0,
     jobs_duplicates INTEGER NOT NULL DEFAULT 0,
     jobs_scored INTEGER NOT NULL DEFAULT 0,
+    cost_usd DOUBLE PRECISION NOT NULL DEFAULT 0,
+    apify_run_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+    summary TEXT,
     errors JSONB NOT NULL DEFAULT '[]'::jsonb,
     started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     finished_at TIMESTAMPTZ
   )`,
-  `CREATE TABLE IF NOT EXISTS extension_heartbeats (
+  `ALTER TABLE automation_runs ADD COLUMN IF NOT EXISTS cost_usd DOUBLE PRECISION NOT NULL DEFAULT 0`,
+  `ALTER TABLE automation_runs ADD COLUMN IF NOT EXISTS apify_run_ids JSONB NOT NULL DEFAULT '[]'::jsonb`,
+  `ALTER TABLE automation_runs ADD COLUMN IF NOT EXISTS summary TEXT`,
+  `CREATE TABLE IF NOT EXISTS apify_sources (
     id TEXT PRIMARY KEY,
-    extension_version TEXT,
-    last_seen_at TIMESTAMPTZ,
-    last_sync_at TIMESTAMPTZ,
-    last_platform TEXT,
-    total_imported INTEGER NOT NULL DEFAULT 0,
-    platform_counts JSONB NOT NULL DEFAULT '{}'::jsonb,
-    last_error TEXT,
-    browser_status TEXT NOT NULL DEFAULT 'offline'
+    name TEXT NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'task',
+    apify_id TEXT NOT NULL,
+    platform TEXT NOT NULL DEFAULT 'other',
+    execution_mode TEXT NOT NULL DEFAULT 'run_and_fetch',
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    max_items INTEGER NOT NULL DEFAULT 30,
+    max_cost_usd DOUBLE PRECISION NOT NULL DEFAULT 0.5,
+    timeout_secs INTEGER NOT NULL DEFAULT 120,
+    memory_mbytes INTEGER NOT NULL DEFAULT 512,
+    input_template JSONB NOT NULL DEFAULT '{}'::jsonb,
+    last_dataset_id TEXT,
+    last_run_at TIMESTAMPTZ,
+    last_status TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`,
-  `CREATE TABLE IF NOT EXISTS oauth_tokens (
-    provider TEXT PRIMARY KEY,
-    account_email TEXT,
-    encrypted_access_token TEXT NOT NULL,
-    encrypted_refresh_token TEXT,
-    scope TEXT,
-    expires_at TIMESTAMPTZ,
+  `CREATE INDEX IF NOT EXISTS apify_sources_enabled_idx ON apify_sources (enabled)`,
+  `CREATE TABLE IF NOT EXISTS apify_runs (
+    id TEXT PRIMARY KEY,
+    automation_run_id TEXT REFERENCES automation_runs(id) ON DELETE SET NULL,
+    source_id TEXT REFERENCES apify_sources(id) ON DELETE SET NULL,
+    source_name TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    apify_id TEXT NOT NULL,
+    apify_run_id TEXT NOT NULL,
+    dataset_id TEXT,
+    status TEXT NOT NULL DEFAULT 'RUNNING',
+    items_fetched INTEGER NOT NULL DEFAULT 0,
+    items_inserted INTEGER NOT NULL DEFAULT 0,
+    items_duplicates INTEGER NOT NULL DEFAULT 0,
+    items_rejected INTEGER NOT NULL DEFAULT 0,
+    cost_usd DOUBLE PRECISION NOT NULL DEFAULT 0,
+    error_message TEXT,
+    started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    finished_at TIMESTAMPTZ,
+    imported_at TIMESTAMPTZ
+  )`,
+  `CREATE INDEX IF NOT EXISTS apify_runs_started_at_idx ON apify_runs (started_at)`,
+  `CREATE INDEX IF NOT EXISTS apify_runs_status_idx ON apify_runs (status)`,
+  `CREATE TABLE IF NOT EXISTS app_settings (
+    id TEXT PRIMARY KEY,
+    monthly_apify_budget_usd DOUBLE PRECISION NOT NULL DEFAULT 5.0,
+    max_cost_per_run_usd DOUBLE PRECISION NOT NULL DEFAULT 0.75,
+    max_items_per_source INTEGER NOT NULL DEFAULT 30,
+    run_timeout_secs INTEGER NOT NULL DEFAULT 120,
+    max_gemini_scores_per_run INTEGER NOT NULL DEFAULT 15,
+    auto_score_on_sync BOOLEAN NOT NULL DEFAULT TRUE,
+    min_cooldown_minutes INTEGER NOT NULL DEFAULT 5,
+    last_apify_verified_at TIMESTAMPTZ,
+    last_apify_verified_ok BOOLEAN,
+    last_apify_account TEXT,
+    last_gemini_verified_at TIMESTAMPTZ,
+    last_gemini_verified_ok BOOLEAN,
+    last_gemini_model TEXT,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`,
 ];
@@ -200,7 +232,6 @@ export function detectDbMode(): DbMode {
     return 'postgres';
   }
   if (process.env.VERCEL === '1') {
-    // Never treat ephemeral Vercel filesystem as persistent storage
     return 'unconfigured_vercel';
   }
   if (process.env.NODE_ENV === 'test' || process.env.VITEST === 'true') {
@@ -216,7 +247,7 @@ export async function getDb(): Promise<AppDatabase> {
   if (desiredMode === 'unconfigured_vercel') {
     state.mode = 'unconfigured_vercel';
     state.lastError =
-      'DATABASE_URL non configurée sur Vercel. Connectez une base PostgreSQL persistante (Neon ou Supabase).';
+      'DATABASE_URL non configurée sur Vercel. Connectez une base PostgreSQL persistante (Neon).';
     throw new Error(state.lastError);
   }
 
@@ -304,7 +335,7 @@ export async function checkDatabaseHealth(): Promise<{
       mode,
       persistent: false,
       detail:
-        'DATABASE_URL manquante sur Vercel — stockage éphémère refusé. Configurez Neon ou Supabase PostgreSQL.',
+        'DATABASE_URL manquante sur Vercel — stockage éphémère refusé. Configurez PostgreSQL Neon.',
     };
   }
   try {
@@ -316,7 +347,7 @@ export async function checkDatabaseHealth(): Promise<{
       persistent: mode === 'postgres' || mode === 'pglite_local',
       detail:
         mode === 'postgres'
-          ? 'PostgreSQL distant (Neon / Supabase) vérifié'
+          ? 'PostgreSQL / Neon distant vérifié et persistant'
           : mode === 'pglite_local'
             ? 'PostgreSQL local embarqué (PGlite dans .data/pglite)'
             : 'PostgreSQL en mémoire (mode test)',

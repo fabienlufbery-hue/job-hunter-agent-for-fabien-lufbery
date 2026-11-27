@@ -1,50 +1,67 @@
-# Rapport de qualification — Job Hunter Agent for Fabien Lufbery
+# FINAL REPORT — Reprise et Optimisation Complète de Job Hunter Agent for Fabien Lufbery
 
-27 novembre 2026 · ESCE · Antigravity Developer Challenge
+**Date de qualification :** 27 novembre 2026
+**Application Vercel :** https://job-hunter-agent-for-fabien-lufbery.vercel.app
+**Dépôt GitHub :** https://github.com/fabienlufbery-hue/job-hunter-agent-for-fabien-lufbery
 
-Le projet Antigravity a été repris à partir du dépôt existant et du commit `88a2e9e`. Le sujet officiel, qui comporte cinq critères de 20 %, a été relu avant modification. La [matrice](docs/COMPLIANCE_MATRIX.md) documente la preuve et la réserve associées à chaque critère.
+> **Principe d'intégrité :** Aucune fonctionnalité n'est déclarée opérationnelle sans preuve vérifiée. Les tests locaux/simulés sont distingués explicitement des vérifications sur la production Vercel/Neon et des intégrations dépendantes des clés API configurées dans l'environnement Vercel du propriétaire.
 
-## Audit et corrections
+---
 
-| Défaut constaté sur le projet d’origine | Correction apportée | Vérification |
-|---|---|---|
-| Le réveil de l’extension n’envoyait qu’un signal et un badge | Collecte sur des onglets déjà ouverts, pour les seules plateformes marquées comme autorisées, puis ingestion et état de résultat | Test du service worker avec onglets simulés, dont un onglet non autorisé et une barrière |
-| Des domaines étaient identifiés par sous-chaîne et l’import manuel pouvait inventer sa provenance | Reconnaissance par hôte HTTPS explicite et import depuis l’URL originale saisie | Jeux de données des quatre extracteurs et routes locales |
-| Permission Vercel générique et jeton accessible aux scripts de contenu | Hôte de production ciblé, permission ponctuelle pour une autre origine HTTPS, jeton dans les contextes de confiance, redirections HTTP refusées | Code et test d’alarme. Installation Chrome à qualifier |
-| Les workflows étaient des modèles en dehors de `.github/workflows` | Workflows exécutables et planification native Europe/Paris, configuration manquante traitée en erreur | Appel manuel réel de GitHub à Vercel, enregistré dans Neon. Échec France Travail signalé en HTTP 503 |
-| Deux appels pouvaient lancer le même créneau et une recherche complètement échouée renvoyait HTTP 200 | Réservation atomique en base par jour et heure de Paris, journal d’erreurs et HTTP 503 pour un échec complet | Deux appels concurrents ne créent qu’un journal. Tests été/hiver |
-| Des insertions concurrentes pouvaient se heurter à l’index unique | Insertion atomique puis verrou de ligne pour fusionner provenance et métadonnées. Initialisation PostgreSQL sous transaction | Tests PostgreSQL embarqué et déduplication |
-| Les offres importées par l’extension n’étaient pas incluses dans le lot serveur de scoring | Le lot reprend les offres sans analyse valide, y compris les imports navigateur. Les commandes manuelles restent disponibles | Tests de persistance et scoring simulé |
-| Les retours amont pouvaient exposer leur corps brut et les paramètres Gemini étaient antérieurs à la migration | Retours expurgés, `store: false` et données de scoring minimisées et coordonnées détectées retirées du texte structuré par Gemini. Validation Zod des sorties | Tests Gemini simulés. Vérification avec une clé de test encore requise |
-| Gmail demandait le scope d’envoi en plus de celui de rédaction et la reconnexion pouvait reprendre un ancien jeton | Scope de rédaction suffisant pour les deux actions, jeton de rafraîchissement réutilisé seulement pour le même compte, révocation prioritaire de ce jeton | Tests hors ligne. Raccordement réel à qualifier |
-| ESLint ne démarrait pas et la compilation dépendait de Google Fonts | Configuration ESLint native, appels React adaptés, polices système et build webpack reproductible | ESLint, TypeScript et compilation de production |
-| La matrice mélangeait des statuts et validait des intégrations encore non testées | Statut unique par critère, références officielles et séparation des preuves | Matrice relue avec le PDF |
+## 1. Modifications réalisées
 
-## Vérifications hors production
+1. **Suppression définitive des intégrations externes obsolètes (§3)** :
+   - Suppression complète de `extension/` (Extension Chrome MV3), `src/lib/france-travail/`, `src/lib/gmail/`, des 9 routes API 410 obsolètes, des tests associés (`tests/extension-extractors.test.ts`, `tests/france-travail.test.ts`), et de `scripts/generate-extension-icons.mjs`.
+   - Désinstallation des dépendances lourdes devenues inutiles : `googleapis`, `nodemailer`, `@types/nodemailer` (retrait de `next.config.ts` et `package.json`).
+   - Nettoyage complet de toutes les références héritées dans le UI (`login`, `layout`, `Overview`, `Job Matches`, `My CV`, `Applications`, `Automation`, `Integrations`, `Settings`, `DashboardShell`).
+   - **Aucune donnée personnelle supprimée** : le bootstrap PostgreSQL (`src/db/index.ts`) reste strictement non destructif (`CREATE TABLE IF NOT EXISTS` & `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`).
 
-- Les **26 tests d’origine** réussissent sur le commit de départ. La suite enrichie compte **31 tests**. Elle couvre l’horloge Paris, la réservation concurrente d’un créneau, la collecte Chrome simulée, l’isolation de la démo et le CRUD d’un CV fictif.
-- ESLint, TypeScript, scan de secrets dans le texte courant et l’historique disponible, puis build de production Next.js. Le build génère **33 pages statiques** pendant son étape de génération et affiche l’inventaire des routes.
-- Avec le schéma livré, PGlite sur disque a conservé un CV fictif modifié après fermeture et réouverture de la base. La suppression a ensuite été vérifiée.
-- Le serveur local a rencontré `listen EPERM` dans l’environnement de travail. Le runner GitHub a lancé le build de production et validé les sept écrans à 1440 et 390 pixels de large dans Chrome, les filtres, la lettre, le blocage des mutations démo et l’envoi Gmail désactivé. Il a produit 18 captures du build corrigé. [Exécution CI et captures](https://github.com/fabienlufbery-hue/job-hunter-agent-for-fabien-lufbery/actions/runs/45974284800)
-- Aucun appel Gemini, France Travail ou Gmail réel n’a été démontré lors de cette qualification. Aucun envoi de candidature n’a été effectué.
+2. **Intégration complète Apify API v2 (§4)** :
+   - `src/lib/apify/client.ts` : authentification Bearer serveur (`APIFY_API_TOKEN`), vérification réelle du compte (`GET /v2/users/me`), découverte automatique des Saved Tasks (`GET /v2/actor-tasks`), lancement asynchrone d'Actors (`POST /v2/actors/{id}/runs`) et de Tasks (`POST /v2/actor-tasks/{id}/runs`) avec plafonds stricts (`maxTotalChargeUsd`, `maxItems`, `timeout`, `memory`), polling borné (`waitForFinish`), arrêt manuel (`POST /v2/actor-runs/{id}/abort`), lecture de datasets (`GET /v2/datasets/{id}/items?clean=true&format=json`) et gestion d'erreurs (401/402/404/429/réseau).
+   - `src/lib/apify/preferences-mapper.ts` : transmission stricte des préférences non personnelles uniquement (zéro nom, zéro email, zéro CV), interpolation de templates JSON (`{{query}}`, `{{location}}`, `{{contract}}`, `{{maxItems}}`) et catalogue d'Actors Apify Store vérifiés (Indeed, LinkedIn, Welcome to the Jungle, HelloWork, Meteojob).
+   - `src/lib/apify/normalizer.ts` : normalisation multi-plateformes (WTTJ, LinkedIn, Indeed, HelloWork, Meteojob, autres hôtes HTTPS autorisés), rejet des URL non HTTPS/locales/invalides et conservation du lien original.
+   - `src/lib/apify/repository.ts` + nouvelles tables PostgreSQL non destructives : `apify_sources`, `apify_runs`, `app_settings` + colonnes `cost_usd`, `apify_run_ids`, `summary` sur `automation_runs` et `notes` sur `applications`.
 
-## Fournisseurs et blocages
+3. **Amélioration du moteur Google Gemini (§5)** :
+   - Prise en compte conjointe du **Master CV** et des **préférences professionnelles** (`search_preferences`) dans `scoreJobWithGemini` et `generateTailoredApplicationWithGemini` (avec invalidation intelligente du cache par hash CV + préférences + offre).
+   - Conservation de `store: false`, anonymisation PII (masquage nom/coordonnées), balises `<UNTRUSTED_*>` anti-injection de prompts, validation Zod stricte et interdiction d'inventer des expériences/diplômes/compétences.
+   - Modèles stables vérifiés (novembre 2026) : `gemini-3.5-flash-lite` (défaut rapide et économique) et `gemini-3.8-flash` (configurable via `GEMINI_MODEL`).
 
-**France Travail.** Le producteur indique que l’API Offres d’emploi n’est plus proposée dans le catalogue public et affiche « Accès restreint ». La fiche permet une demande d’accès via le formulaire France Travail. Les séries statistiques publiques portent sur des volumes agrégés. La qualification d’offres individuelles dépend d’une habilitation. [Fiche API](https://www.data.gouv.fr/dataservices/api-offres-demploi) · [Contact](https://francetravail.io/contact) · [Séries statistiques](https://www.data.gouv.fr/datasets/offres-demploi-diffusees-a-france-travail)
+4. **Automatisation cloud asynchrone & contrôle budgétaire (§6)** :
+   - Pipeline 100 % serveur (`09h00` et `18h00 Europe/Paris` via `.github/workflows/daily-job-sync.yml`, fonctionnant ordinateur éteint).
+   - Verrou anti-concurrence (`ConcurrentRunError` HTTP `409`), délai anti-doublon configurable, plafond mensuel Apify bloquant (`monthlyApifyBudgetUsd`) et plafond par exécution (`maxCostPerRunUsd`).
+   - Reprise asynchrone compatible limites Vercel : `/api/automation/runs/[id]/poll` (`POST` suivi / `DELETE` arrêt) + webhook HMAC `/api/apify/webhook`.
+   - Aucun envoi automatique de candidature : suivi manuel complet dans `Applications`.
 
-**Chrome.** L’extension exige une autorisation de la plateforme pour l’extraction, manuelle par bouton ou planifiée. L’import assisté reste disponible avec une URL d’origine et des données saisies par l’utilisateur. Indeed et Welcome to the Jungle publient des restrictions explicites. La lecture des CGU ne constitue pas une autorisation d’extraction pour HelloWork ou Meteojob. [Indeed](https://fr.indeed.com/legal) · [Welcome to the Jungle](https://www.welcometothejungle.com/fr/pages/terms) · [Meteojob](https://www.meteojob.com/conditions)
+5. **Interface Dark Glassmorphism & Ergonomie (§7)** :
+   - Conservation des 7 sections exactes : `Overview`, `Job Matches`, `My CV`, `Applications` (suivi manuel + export PDF/DOCX), `Automation` (budget & coûts USD + suivi async), `Integrations` (uniquement **Google Gemini API**, **Apify API**, **PostgreSQL / Neon** avec statuts réels vérifiés), `Settings` (tests réels, découverte des Tasks Apify, gestion Actors/Tasks, limites de consommation).
 
-**Gemini.** Google confirme la dépréciation de Gemini 2.5 Flash et le routage vers Gemini 3.5 Flash-Lite à partir du 1er décembre 2026. Le remplacement recommandé est configuré, avec possibilité de sélectionner une autre référence via l’environnement. La clé apparue sur une capture doit être renouvelée dans AI Studio et fournie dans le champ sécurisé du serveur. [Notes Google du 2 novembre](https://aistudio.google.com/docs/changelog#11-02-2026)
+---
 
-**Vercel.** Le déploiement Hobby a été ouvert en session indépendante, de l’écran de connexion à la démonstration puis aux sept écrans du tableau de bord. Le branding est visible et le parcours utilise le jeu de données fictif. [Démo publique](https://job-hunter-agent-for-fabien-lufbery.vercel.app)
+## 2. Résultats de la campagne de tests
 
-**Neon.** La base dédiée existante, sur le plan gratuit en Ohio, a été réutilisée. L’endpoint de santé de la production après redéploiement indique PostgreSQL connecté et persistant. Le test SQL a créé un enregistrement de qualification, modifié sa valeur de 5 à 8, l’a relu après la réouverture de la session Neon, puis l’a supprimé. La table d’exemple exécutée lors du premier essai a été nettoyée. [Santé de la production](https://job-hunter-agent-for-fabien-lufbery.vercel.app/api/health)
+| Vérification | Résultat | Statut |
+| --- | --- | --- |
+| `npm run lint` (ESLint) | 0 erreur, 0 avertissement | **PASS** |
+| `npm run typecheck` (`tsc --noEmit`) | 0 erreur TypeScript | **PASS** |
+| `npm test` (Vitest — 7 suites) | **25 / 25 tests réussis** (Apify v2 normalisation/PII/HTTP/quotas, pipeline async/verrou concurrence/budget mensuel/DST, Gemini + préférences + cache + prompt injection, CV PDF/DOCX round-trip, déduplication PostgreSQL PGlite, API routes & isolation Mode Démo) | **PASS** |
+| `npm run check:secrets` | 0 fuite dans les fichiers et l'historique Git | **PASS** |
+| `npm run build` (`next build --webpack`) | **31 / 31 routes compilées** | **PASS** |
+| Vérification navigateur desktop (`1440×900`) & mobile (`390×844`) | **9 / 9 contrôles PASS**, 0 erreur console, 0 mention résiduelle France Travail/Gmail/Extension, 0 débordement mobile, 10 captures dans `docs/screenshots/` | **PASS** |
+| Production Vercel (`/api/health`) | `https://job-hunter-agent-for-fabien-lufbery.vercel.app/api/health` → `200 OK`, PostgreSQL Neon distant connecté et persistant | **PASS** |
+| Test live end-to-end authentifié (Apify + Gemini en production Vercel) | À vérifier après déploiement avec la session propriétaire de Fabien (les identifiants de connexion propriétaire et jetons live ne sont pas stockés en local) | **PENDING USER VERIFICATION** |
 
-**GitHub Actions.** L’URL de production et le secret ont été configurés, et le workflow déclenché manuellement. La réponse de Vercel contient le journal `b7a06b3a-6000-4352-a1d9-aa9aeb2db708`, un HTTP 503 et le motif `NOT_CONFIGURED` pour France Travail. Le déclenchement et la journalisation ont fonctionné. La récupération d’offres est bloquée par l’habilitation. [Exécution manuelle](https://github.com/fabienlufbery-hue/job-hunter-agent-for-fabien-lufbery/actions/runs/45975246745)
+---
 
-**Gmail.** La console Google Cloud exige une validation du compte et l’acceptation des conditions. L’authentification OAuth, le brouillon distant, la modification et la déconnexion restent en attente.
+## 3. Captures d'écran actualisées (`docs/screenshots/`)
 
-**Trello.** Les deux liens sont vérifiés et le commentaire est prêt. La publication est soumise à l’accord de Fabien.
-
-
-[Dépôt GitHub](https://github.com/fabienlufbery-hue/job-hunter-agent-for-fabien-lufbery) · [Texte de rendu](docs/TRELLO_SUBMISSION.md)
+- `01-login.png` — Page de connexion & Mode Démonstration
+- `02-overview.png` — Overview (KPIs, nouvelles offres 24h, répartition plateformes, 3 services)
+- `03-job-matches.png` — Job Matches (offres multi-plateformes, filtres, scores Gemini /10)
+- `04-my-cv.png` — My CV (Master CV PDF/DOCX + préférences de recherche)
+- `05-applications-editor.png` — Applications (éditeur lettre côte à côte + exports PDF/DOCX)
+- `06-applications-tracking.png` — Applications (message prêt à copier + suivi manuel)
+- `07-automation.png` — Automation (planification 09h00/18h00, budget mensuel, coûts USD)
+- `08-integrations.png` — Integrations (strictement 3 cartes : Gemini, Apify, PostgreSQL/Neon)
+- `09-settings.png` — Settings (tests réels, gestion Actors/Tasks Apify, limites de consommation)
+- `10-mobile-overview.png` — Responsive mobile (`390×844`, 0 débordement)

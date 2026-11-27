@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   XCircle,
+  Zap,
 } from 'lucide-react';
 import {
   Badge,
@@ -27,9 +28,10 @@ interface OverviewData {
   isDemo: boolean;
   kpis: {
     totalJobs: number;
+    newJobsLast24h: number;
     compatibleJobs: number;
     preparedApplications: number;
-    sentApplications: number;
+    appliedApplications: number;
   };
   bySource: Record<string, number>;
   topJobs: Array<{
@@ -44,7 +46,7 @@ interface OverviewData {
   }>;
   lastSyncAt: string | null;
   nextScheduledRun: { iso: string; labelParis: string; slotHour: number };
-  sourcesStatus: Array<{
+  integrations: Array<{
     id: string;
     name: string;
     status: string;
@@ -55,11 +57,12 @@ interface OverviewData {
 }
 
 const SOURCE_ORDER = [
-  'france_travail',
   'welcome_to_the_jungle',
+  'linkedin',
   'indeed',
   'hellowork',
   'meteojob',
+  'other',
 ];
 
 export default function OverviewPage() {
@@ -68,16 +71,19 @@ export default function OverviewPage() {
   const [error, setError] = useState<string | null>(null);
 
   function load() {
-    return fetch('/api/overview').then(async (res) => {
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Erreur chargement');
-      setData(json);
-      setError(null);
-    }).catch((err) => {
-      setError(err instanceof Error ? err.message : 'Erreur inconnue');
-    }).finally(() => {
-      setLoading(false);
-    });
+    return fetch('/api/overview')
+      .then(async (res) => {
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || 'Erreur chargement');
+        setData(json);
+        setError(null);
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : 'Erreur inconnue');
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   }
 
   useEffect(() => {
@@ -93,13 +99,19 @@ export default function OverviewPage() {
     <div className="space-y-6">
       <SectionHeader
         title="Overview — Job Hunter Agent for Fabien Lufbery"
-        subtitle="Vue synthétique de vos offres collectées sur les 5 sources, scores Gemini et candidatures."
+        subtitle="Vue globale de votre veille automatisée Apify, de vos scores de compatibilité Gemini et du suivi de vos candidatures."
         action={
           <>
             <Button variant="secondary" size="sm" onClick={() => void load()} disabled={loading}>
               <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
               Actualiser
             </Button>
+            <Link href="/automation">
+              <Button variant="secondary" size="sm">
+                <Zap className="h-3.5 w-3.5" />
+                Lancer une recherche
+              </Button>
+            </Link>
             <Link href="/jobs">
               <Button size="sm">
                 <Briefcase className="h-3.5 w-3.5" />
@@ -128,7 +140,9 @@ export default function OverviewPage() {
           <p className="mt-3 text-3xl font-bold tracking-tight text-white">
             {loading ? '—' : data?.kpis.totalJobs ?? 0}
           </p>
-          <p className="mt-1 text-xs text-slate-400">Dédupliquées sur les 5 sources</p>
+          <p className="mt-1 text-xs text-cyan-300/90">
+            +{loading ? '0' : data?.kpis.newJobsLast24h ?? 0} nouvelle(s) sur 24h
+          </p>
         </GlassCard>
 
         <GlassCard hover>
@@ -141,7 +155,7 @@ export default function OverviewPage() {
           <p className="mt-3 text-3xl font-bold tracking-tight text-white">
             {loading ? '—' : data?.kpis.compatibleJobs ?? 0}
           </p>
-          <p className="mt-1 text-xs text-slate-400">Score Gemini supérieur au seuil cible</p>
+          <p className="mt-1 text-xs text-slate-400">Score Gemini au-dessus de votre seuil</p>
         </GlassCard>
 
         <GlassCard hover>
@@ -159,15 +173,15 @@ export default function OverviewPage() {
 
         <GlassCard hover>
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-400">Candidatures envoyées</span>
+            <span className="text-xs font-medium text-slate-400">Candidatures suivies</span>
             <div className="rounded-xl bg-emerald-500/15 p-2 text-emerald-300 border border-emerald-400/20">
               <Send className="h-4 w-4" />
             </div>
           </div>
           <p className="mt-3 text-3xl font-bold tracking-tight text-white">
-            {loading ? '—' : data?.kpis.sentApplications ?? 0}
+            {loading ? '—' : data?.kpis.appliedApplications ?? 0}
           </p>
-          <p className="mt-1 text-xs text-slate-400">Envoyées après confirmation humaine</p>
+          <p className="mt-1 text-xs text-slate-400">Envoyées manuellement / entretiens</p>
         </GlassCard>
       </div>
 
@@ -179,7 +193,7 @@ export default function OverviewPage() {
               <RefreshCw className="h-4 w-4" />
             </div>
             <div>
-              <p className="text-xs text-slate-400">Dernière synchronisation</p>
+              <p className="text-xs text-slate-400">Dernière recherche</p>
               <p className="text-sm font-semibold text-white">
                 {data?.lastSyncAt ? formatFrDate(data.lastSyncAt) : 'Aucune exécution enregistrée'}
               </p>
@@ -198,7 +212,9 @@ export default function OverviewPage() {
               <Clock className="h-4 w-4" />
             </div>
             <div>
-              <p className="text-xs text-slate-400">Prochaine recherche programmée (09h00 &amp; 18h00)</p>
+              <p className="text-xs text-slate-400">
+                Prochaine recherche automatique (09h00 &amp; 18h00)
+              </p>
               <p className="text-sm font-semibold text-white">
                 {data?.nextScheduledRun?.labelParis || '—'}
               </p>
@@ -208,14 +224,14 @@ export default function OverviewPage() {
         </GlassCard>
       </div>
 
-      {/* Platform Breakdown & Sources Status */}
+      {/* Platform Breakdown & Core Services Status */}
       <div className="grid gap-6 lg:grid-cols-12">
         <GlassCard className="lg:col-span-5 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-semibold text-white">Répartition par plateforme</h2>
-            <Badge variant="info">5 sources</Badge>
+            <Badge variant="info">Collecte Apify</Badge>
           </div>
-          <div className="space-y-3.5">
+          <div className="space-y-3">
             {SOURCE_ORDER.map((source) => {
               const info = PLATFORM_DISPLAY[source];
               const count = data?.bySource?.[source] || 0;
@@ -240,18 +256,20 @@ export default function OverviewPage() {
 
         <GlassCard className="lg:col-span-7 space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold text-white">Statut réel des 5 sources</h2>
+            <h2 className="text-base font-semibold text-white">État de l’architecture (3 services)</h2>
             <Link href="/integrations" className="text-xs text-cyan-300 hover:underline">
-              Voir toutes les intégrations →
+              Gérer les intégrations →
             </Link>
           </div>
           <div className="divide-y divide-white/[0.06]">
-            {(data?.sourcesStatus || []).map((src) => {
-              const isOk = src.status === 'connected';
-              const isWarn =
-                src.status === 'configured_unverified' || src.status === 'needs_attention';
+            {(data?.integrations || []).map((svc) => {
+              const isOk = svc.status === 'connected';
+              const isWarn = svc.status === 'configured_unverified';
               return (
-                <div key={src.id} className="flex items-start justify-between gap-3 py-3 first:pt-0 last:pb-0">
+                <div
+                  key={svc.id}
+                  className="flex items-start justify-between gap-3 py-3.5 first:pt-0 last:pb-0"
+                >
                   <div className="flex items-start gap-2.5 min-w-0">
                     {isOk ? (
                       <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
@@ -261,12 +279,15 @@ export default function OverviewPage() {
                       <XCircle className="h-4 w-4 text-slate-500 shrink-0 mt-0.5" />
                     )}
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-white">{src.name}</p>
-                      <p className="text-xs text-slate-400 line-clamp-1">{src.detail}</p>
+                      <p className="text-sm font-medium text-white">{svc.name}</p>
+                      <p className="text-xs text-slate-400 line-clamp-2">{svc.detail}</p>
                     </div>
                   </div>
-                  <Badge variant={isOk ? 'success' : isWarn ? 'warning' : 'default'}>
-                    {src.statusLabel}
+                  <Badge
+                    className="shrink-0"
+                    variant={isOk ? 'success' : isWarn ? 'warning' : 'default'}
+                  >
+                    {svc.statusLabel}
                   </Badge>
                 </div>
               );
@@ -279,9 +300,9 @@ export default function OverviewPage() {
       <GlassCard className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-base font-semibold text-white">Meilleures offres détectées</h2>
+            <h2 className="text-base font-semibold text-white">Meilleures correspondances</h2>
             <p className="text-xs text-slate-400">
-              Classées par score de compatibilité Gemini (1 à 10)
+              Offres classées par score de compatibilité Gemini (1 à 10)
             </p>
           </div>
           <Link href="/jobs">
@@ -295,7 +316,8 @@ export default function OverviewPage() {
           <div className="rounded-xl border border-dashed border-white/15 bg-white/[0.02] p-8 text-center">
             <p className="text-sm text-slate-300">Aucune offre collectée pour le moment.</p>
             <p className="mt-1 text-xs text-slate-400">
-              Lancez une synchronisation Apify depuis Job Matches.
+              Configurez vos Actors ou Tasks Apify dans <strong>Settings</strong> puis lancez une
+              recherche depuis <strong>Automation</strong> ou <strong>Job Matches</strong>.
             </p>
           </div>
         ) : (

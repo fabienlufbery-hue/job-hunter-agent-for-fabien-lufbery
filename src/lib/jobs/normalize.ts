@@ -263,5 +263,7 @@ export const SOURCE_LABELS: Record<JobSource, string> = {
   indeed: 'Indeed',
   hellowork: 'HelloWork',
   meteojob: 'Meteojob',
-  france_travail: 'France Travail',
+  linkedin: 'LinkedIn',
+  other: 'Autre plateforme',
+  france_travail: 'Archive (France Travail)',
 };

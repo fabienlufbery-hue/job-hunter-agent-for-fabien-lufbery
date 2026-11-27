@@ -21,10 +21,11 @@ export async function GET() {
   if (auth.isDemo) {
     const bySource: Record<string, number> = {
       welcome_to_the_jungle: 0,
+      linkedin: 0,
       indeed: 0,
       hellowork: 0,
       meteojob: 0,
-      france_travail: 0,
+      other: 0,
     };
     for (const j of DEMO_JOBS) {
       bySource[j.source] = (bySource[j.source] || 0) + 1;
@@ -42,15 +43,18 @@ export async function GET() {
       isDemo: true,
       kpis: {
         totalJobs: DEMO_JOBS.length,
+        newJobsLast24h: 3,
         compatibleJobs: compatibleJobs.length,
         preparedApplications: DEMO_APPLICATIONS.length,
-        sentApplications: DEMO_APPLICATIONS.filter((a) => a.status === 'sent').length,
+        appliedApplications: DEMO_APPLICATIONS.filter(
+          (a) => a.status === 'applied' || a.status === 'sent'
+        ).length,
       },
       bySource,
       topJobs,
       lastSyncAt: DEMO_AUTOMATION_RUNS[0]?.finishedAt || null,
       nextScheduledRun,
-      sourcesStatus: integrations.filter((i) => i.id === 'apify'),
+      integrations,
     });
   }
 
@@ -59,7 +63,11 @@ export async function GET() {
     const [jobs, apps, runs, prefsRows, integrations] = await Promise.all([
       listJobsWithAnalyses(),
       db.select().from(schema.applications),
-      db.select().from(schema.automationRuns).orderBy(desc(schema.automationRuns.startedAt)).limit(5),
+      db
+        .select()
+        .from(schema.automationRuns)
+        .orderBy(desc(schema.automationRuns.startedAt))
+        .limit(5),
       db
         .select()
         .from(schema.searchPreferences)
@@ -69,18 +77,23 @@ export async function GET() {
     ]);
 
     const minFit = prefsRows[0]?.minFitScore ?? 6;
+    const cutoff24h = Date.now() - 24 * 60 * 60 * 1000;
     const bySource: Record<string, number> = {
       welcome_to_the_jungle: 0,
+      linkedin: 0,
       indeed: 0,
       hellowork: 0,
       meteojob: 0,
-      france_travail: 0,
+      other: 0,
     };
     for (const j of jobs) {
       bySource[j.source] = (bySource[j.source] || 0) + 1;
     }
 
     const compatibleJobs = jobs.filter((j) => (j.analysis?.fitScore ?? 0) >= minFit);
+    const newJobsLast24h = jobs.filter(
+      (j) => new Date(j.collectedAt).getTime() >= cutoff24h
+    ).length;
     const topJobs = [...jobs]
       .sort((a, b) => (b.analysis?.fitScore ?? -1) - (a.analysis?.fitScore ?? -1))
       .slice(0, 5);
@@ -89,15 +102,23 @@ export async function GET() {
       isDemo: false,
       kpis: {
         totalJobs: jobs.length,
+        newJobsLast24h,
         compatibleJobs: compatibleJobs.length,
         preparedApplications: apps.length,
-        sentApplications: apps.filter((a) => a.status === 'sent').length,
+        appliedApplications: apps.filter(
+          (a) =>
+            a.status === 'applied' ||
+            a.status === 'sent' ||
+            a.status === 'interview' ||
+            a.status === 'offer'
+        ).length,
       },
       bySource,
       topJobs,
-      lastSyncAt: runs[0]?.finishedAt?.toISOString() || runs[0]?.startedAt?.toISOString() || null,
+      lastSyncAt:
+        runs[0]?.finishedAt?.toISOString() || runs[0]?.startedAt?.toISOString() || null,
       nextScheduledRun,
-      sourcesStatus: integrations.filter((i) => i.id === 'apify'),
+      integrations,
     });
   } catch (err) {
     return NextResponse.json(

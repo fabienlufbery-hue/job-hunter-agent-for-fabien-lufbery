@@ -33,6 +33,11 @@ export function formatFrDateShort(iso: string | null | undefined): string {
   }
 }
 
+export function formatUsd(amount: number | null | undefined): string {
+  const n = typeof amount === 'number' && Number.isFinite(amount) ? amount : 0;
+  return `$${n.toFixed(3)}`;
+}
+
 export const PLATFORM_DISPLAY: Record<
   string,
   { label: string; short: string; colorClass: string }
@@ -57,9 +62,32 @@ export const PLATFORM_DISPLAY: Record<
     short: 'Meteojob',
     colorClass: 'bg-violet-400/15 text-violet-300 border-violet-400/30',
   },
-  france_travail: {
-    label: 'France Travail',
-    short: 'France Travail',
-    colorClass: 'bg-cyan-400/15 text-cyan-300 border-cyan-400/30',
+  linkedin: {
+    label: 'LinkedIn',
+    short: 'LinkedIn',
+    colorClass: 'bg-sky-400/15 text-sky-300 border-sky-400/30',
   },
+  other: {
+    label: 'Autre source Apify',
+    short: 'Autre',
+    colorClass: 'bg-teal-400/15 text-teal-300 border-teal-400/30',
+  },
+  france_travail: {
+    label: 'Archive (France Travail)',
+    short: 'Archive',
+    colorClass: 'bg-slate-400/15 text-slate-300 border-slate-400/30',
+  },
+};
+
+export const APPLICATION_TRACKING_LABELS: Record<
+  string,
+  { label: string; variant: 'default' | 'info' | 'violet' | 'success' | 'warning' | 'danger' }
+> = {
+  draft: { label: 'Brouillon', variant: 'default' },
+  ready: { label: 'Prête à envoyer', variant: 'violet' },
+  applied: { label: 'Candidature envoyée', variant: 'info' },
+  sent: { label: 'Candidature envoyée', variant: 'info' },
+  interview: { label: 'Entretien', variant: 'warning' },
+  offer: { label: 'Offre reçue', variant: 'success' },
+  rejected: { label: 'Refusée', variant: 'danger' },
 };

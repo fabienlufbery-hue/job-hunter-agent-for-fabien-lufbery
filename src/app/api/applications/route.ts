@@ -20,17 +20,15 @@ export async function GET() {
     return NextResponse.json({
       isDemo: true,
       applications: DEMO_APPLICATIONS,
-      emailLogs: [],
     });
   }
 
   try {
     const db = await getDb();
-    const [apps, allJobs, allAnalyses, logs] = await Promise.all([
+    const [apps, allJobs, allAnalyses] = await Promise.all([
       db.select().from(schema.applications).orderBy(desc(schema.applications.updatedAt)),
       db.select().from(schema.jobs),
       db.select().from(schema.jobAnalyses),
-      db.select().from(schema.emailLogs).orderBy(desc(schema.emailLogs.createdAt)).limit(50),
     ]);
 
     const jobMap = new Map(allJobs.map((j) => [j.id, j]));
@@ -44,9 +42,9 @@ export async function GET() {
         sentAt: app.sentAt ? app.sentAt.toISOString() : null,
         createdAt: app.createdAt.toISOString(),
         updatedAt: app.updatedAt.toISOString(),
-        jobTitle: job?.title || 'Offre supprimée',
+        jobTitle: job?.title || 'Offre archivée',
         company: job?.company || null,
-        source: job?.source || 'france_travail',
+        source: job?.source || 'other',
         originalUrl: job?.originalUrl || '',
         jobDescription: job?.description || '',
         fitScore: analysis?.fitScore ?? null,
@@ -56,7 +54,6 @@ export async function GET() {
     return NextResponse.json({
       isDemo: false,
       applications: enriched,
-      emailLogs: logs.map((l) => ({ ...l, createdAt: l.createdAt.toISOString() })),
     });
   } catch (err) {
     return NextResponse.json(
@@ -92,6 +89,12 @@ export async function POST(request: Request) {
       );
     }
 
+    const [prefsRow] = await db
+      .select()
+      .from(schema.searchPreferences)
+      .where(eq(schema.searchPreferences.id, 'primary'))
+      .limit(1);
+
     const { output, modelUsed } = await generateTailoredApplicationWithGemini({
       cv: {
         fullName: cv.fullName,
@@ -107,6 +110,17 @@ export async function POST(request: Request) {
         certifications: cv.certifications,
         sectors: cv.sectors,
       },
+      preferences: prefsRow
+        ? {
+            targetRoles: prefsRow.targetRoles,
+            sectors: prefsRow.sectors,
+            cities: prefsRow.cities,
+            contractTypes: prefsRow.contractTypes,
+            duration: prefsRow.duration,
+            remotePolicy: prefsRow.remotePolicy,
+            keywords: prefsRow.keywords,
+          }
+        : null,
       job: {
         title: job.title,
         company: job.company,
@@ -135,6 +149,7 @@ export async function POST(request: Request) {
       emailSubject: output.email_subject,
       emailBody: output.email_body,
       recipientEmail: job.recruiterEmail || null,
+      notes: null,
       modelUsed,
       createdAt: now,
       updatedAt: now,
@@ -164,7 +179,9 @@ export async function POST(request: Request) {
         emailSubject: output.email_subject,
         emailBody: output.email_body,
         recipientEmail: job.recruiterEmail || null,
+        notes: null,
         modelUsed,
+        sentAt: null,
         createdAt: now.toISOString(),
         updatedAt: now.toISOString(),
       },

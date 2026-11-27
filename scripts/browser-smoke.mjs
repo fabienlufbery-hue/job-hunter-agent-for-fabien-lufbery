@@ -62,9 +62,9 @@ try {
     }
 
     await page.goto('/applications');
-    await page.getByRole('button', { name: 'Brouillon de mail' }).click();
-    assert.equal(await page.getByRole('button', { name: 'Copier le brouillon' }).isEnabled(), false);
-    await page.screenshot({ path: `browser-evidence/${device}-gmail.png`, fullPage: true });
+    await page.getByRole('button', { name: 'Message & Suivi manuel' }).click();
+    assert.equal(await page.getByRole('button', { name: 'Copier le message' }).isEnabled(), false);
+    await page.screenshot({ path: `browser-evidence/${device}-message.png`, fullPage: true });
     assert.deepEqual(pageErrors, [], `Unexpected error on ${device}`);
     console.log(`PASS ${device.padEnd(7)} mode démo sans accès aux mutations, copie désactivée`);
     await context.close();

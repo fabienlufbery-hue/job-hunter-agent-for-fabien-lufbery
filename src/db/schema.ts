@@ -3,6 +3,7 @@ import {
   text,
   integer,
   boolean,
+  doublePrecision,
   timestamp,
   jsonb,
   index,
@@ -51,6 +52,7 @@ export interface JobProvenance {
   url: string;
   externalId?: string | null;
   seenAt: string;
+  apifyRunId?: string | null;
 }
 
 export interface CvSuggestion {
@@ -72,14 +74,21 @@ export interface AutomationErrorEntry {
   code?: string;
 }
 
-export const JOB_SOURCES = [
+export const ACTIVE_JOB_SOURCES = [
   'welcome_to_the_jungle',
   'indeed',
   'hellowork',
   'meteojob',
-  'france_travail',
+  'linkedin',
+  'other',
 ] as const;
 
+export const JOB_SOURCES = [
+  ...ACTIVE_JOB_SOURCES,
+  'france_travail', // Kept strictly for backward compatibility with historical rows
+] as const;
+
+export type ActiveJobSource = (typeof ACTIVE_JOB_SOURCES)[number];
 export type JobSource = (typeof JOB_SOURCES)[number];
 
 export const APPLICATION_STATUSES = [
@@ -87,16 +96,22 @@ export const APPLICATION_STATUSES = [
   'saved',
   'reviewing',
   'tailored',
-  'draft_ready',
   'applied',
   'interview',
+  'offer',
   'rejected',
   'archived',
 ] as const;
 
 export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
 
-// ---- Tables ----
+export const APIFY_SOURCE_KINDS = ['task', 'actor'] as const;
+export type ApifySourceKind = (typeof APIFY_SOURCE_KINDS)[number];
+
+export const APIFY_EXECUTION_MODES = ['run_and_fetch', 'fetch_last_dataset'] as const;
+export type ApifyExecutionMode = (typeof APIFY_EXECUTION_MODES)[number];
+
+// ---- Existing Core Tables (Preserved non-destructively) ----
 
 export const masterCv = pgTable('master_cv', {
   id: text('id').primaryKey(),
@@ -214,8 +229,7 @@ export const applications = pgTable(
     emailSubject: text('email_subject').notNull(),
     emailBody: text('email_body').notNull(),
     recipientEmail: text('recipient_email'),
-    gmailDraftId: text('gmail_draft_id'),
-    gmailMessageId: text('gmail_message_id'),
+    notes: text('notes'),
     modelUsed: text('model_used'),
     sentAt: timestamp('sent_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
@@ -223,21 +237,6 @@ export const applications = pgTable(
   },
   (table) => [index('applications_job_id_idx').on(table.jobId)]
 );
-
-export const emailLogs = pgTable('email_logs', {
-  id: text('id').primaryKey(),
-  applicationId: text('application_id').references(() => applications.id, { onDelete: 'set null' }),
-  jobId: text('job_id').references(() => jobs.id, { onDelete: 'set null' }),
-  recipientEmail: text('recipient_email').notNull(),
-  subject: text('subject').notNull(),
-  action: text('action').notNull(), // 'draft_created' | 'sent' | 'failed'
-  gmailMessageId: text('gmail_message_id'),
-  gmailDraftId: text('gmail_draft_id'),
-  attachments: jsonb('attachments').$type<string[]>().notNull().default([]),
-  humanConfirmed: boolean('human_confirmed').notNull().default(false),
-  errorMessage: text('error_message'),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-});
 
 export const automationRuns = pgTable('automation_runs', {
   id: text('id').primaryKey(),
@@ -248,29 +247,87 @@ export const automationRuns = pgTable('automation_runs', {
   jobsNew: integer('jobs_new').notNull().default(0),
   jobsDuplicates: integer('jobs_duplicates').notNull().default(0),
   jobsScored: integer('jobs_scored').notNull().default(0),
+  costUsd: doublePrecision('cost_usd').notNull().default(0),
+  apifyRunIds: jsonb('apify_run_ids').$type<string[]>().notNull().default([]),
+  summary: text('summary'),
   errors: jsonb('errors').$type<AutomationErrorEntry[]>().notNull().default([]),
   startedAt: timestamp('started_at', { withTimezone: true }).defaultNow().notNull(),
   finishedAt: timestamp('finished_at', { withTimezone: true }),
 });
 
-export const extensionHeartbeats = pgTable('extension_heartbeats', {
-  id: text('id').primaryKey(),
-  extensionVersion: text('extension_version'),
-  lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
-  lastSyncAt: timestamp('last_sync_at', { withTimezone: true }),
-  lastPlatform: text('last_platform'),
-  totalImported: integer('total_imported').notNull().default(0),
-  platformCounts: jsonb('platform_counts').$type<Record<string, number>>().notNull().default({}),
-  lastError: text('last_error'),
-  browserStatus: text('browser_status').notNull().default('offline'),
-});
+// ---- New Apify & Consumption Control Tables ----
 
-export const oauthTokens = pgTable('oauth_tokens', {
-  provider: text('provider').primaryKey(),
-  accountEmail: text('account_email'),
-  encryptedAccessToken: text('encrypted_access_token').notNull(),
-  encryptedRefreshToken: text('encrypted_refresh_token'),
-  scope: text('scope'),
-  expiresAt: timestamp('expires_at', { withTimezone: true }),
+export const apifySources = pgTable(
+  'apify_sources',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    kind: text('kind').$type<ApifySourceKind>().notNull().default('task'),
+    apifyId: text('apify_id').notNull(),
+    platform: text('platform').$type<ActiveJobSource>().notNull().default('other'),
+    executionMode: text('execution_mode')
+      .$type<ApifyExecutionMode>()
+      .notNull()
+      .default('run_and_fetch'),
+    enabled: boolean('enabled').notNull().default(true),
+    maxItems: integer('max_items').notNull().default(30),
+    maxCostUsd: doublePrecision('max_cost_usd').notNull().default(0.5),
+    timeoutSecs: integer('timeout_secs').notNull().default(120),
+    memoryMbytes: integer('memory_mbytes').notNull().default(512),
+    inputTemplate: jsonb('input_template').$type<Record<string, unknown>>().notNull().default({}),
+    lastDatasetId: text('last_dataset_id'),
+    lastRunAt: timestamp('last_run_at', { withTimezone: true }),
+    lastStatus: text('last_status'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index('apify_sources_enabled_idx').on(table.enabled)]
+);
+
+export const apifyRuns = pgTable(
+  'apify_runs',
+  {
+    id: text('id').primaryKey(),
+    automationRunId: text('automation_run_id').references(() => automationRuns.id, {
+      onDelete: 'set null',
+    }),
+    sourceId: text('source_id').references(() => apifySources.id, { onDelete: 'set null' }),
+    sourceName: text('source_name').notNull(),
+    kind: text('kind').$type<ApifySourceKind>().notNull(),
+    apifyId: text('apify_id').notNull(),
+    apifyRunId: text('apify_run_id').notNull(),
+    datasetId: text('dataset_id'),
+    status: text('status').notNull().default('RUNNING'),
+    itemsFetched: integer('items_fetched').notNull().default(0),
+    itemsInserted: integer('items_inserted').notNull().default(0),
+    itemsDuplicates: integer('items_duplicates').notNull().default(0),
+    itemsRejected: integer('items_rejected').notNull().default(0),
+    costUsd: doublePrecision('cost_usd').notNull().default(0),
+    errorMessage: text('error_message'),
+    startedAt: timestamp('started_at', { withTimezone: true }).defaultNow().notNull(),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+    importedAt: timestamp('imported_at', { withTimezone: true }),
+  },
+  (table) => [
+    index('apify_runs_started_at_idx').on(table.startedAt),
+    index('apify_runs_status_idx').on(table.status),
+  ]
+);
+
+export const appSettings = pgTable('app_settings', {
+  id: text('id').primaryKey(),
+  monthlyApifyBudgetUsd: doublePrecision('monthly_apify_budget_usd').notNull().default(5.0),
+  maxCostPerRunUsd: doublePrecision('max_cost_per_run_usd').notNull().default(0.75),
+  maxItemsPerSource: integer('max_items_per_source').notNull().default(30),
+  runTimeoutSecs: integer('run_timeout_secs').notNull().default(120),
+  maxGeminiScoresPerRun: integer('max_gemini_scores_per_run').notNull().default(15),
+  autoScoreOnSync: boolean('auto_score_on_sync').notNull().default(true),
+  minCooldownMinutes: integer('min_cooldown_minutes').notNull().default(5),
+  lastApifyVerifiedAt: timestamp('last_apify_verified_at', { withTimezone: true }),
+  lastApifyVerifiedOk: boolean('last_apify_verified_ok'),
+  lastApifyAccount: text('last_apify_account'),
+  lastGeminiVerifiedAt: timestamp('last_gemini_verified_at', { withTimezone: true }),
+  lastGeminiVerifiedOk: boolean('last_gemini_verified_ok'),
+  lastGeminiModel: text('last_gemini_model'),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });

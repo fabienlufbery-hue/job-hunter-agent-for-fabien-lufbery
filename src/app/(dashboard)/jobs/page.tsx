@@ -182,7 +182,12 @@ export default function JobMatchesPage() {
       const res = await fetch('/api/jobs/sync/apify', { method: 'POST' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Erreur Apify');
-      setFeedback({ kind: 'ok', text: 'Apify : ' + data.inserted + ' nouvelles, ' + data.duplicates + ' doublons, ' + data.rejected + ' rejetées.' });
+      setFeedback({
+        kind: 'ok',
+        text: data.hasAsyncPending
+          ? 'Collecte Apify lancée en arrière-plan. Suivez son avancement dans Automation.'
+          : `Recherche Apify terminée : ${data.inserted} nouvelle(s), ${data.duplicates} doublon(s), ${data.scored} notée(s) IA.`,
+      });
       await loadJobs();
     } catch (err) {
       setFeedback({ kind: 'err', text: err instanceof Error ? err.message : 'Erreur Apify' });
@@ -193,17 +198,16 @@ export default function JobMatchesPage() {
     <div className="space-y-5">
       <SectionHeader
         title="Job Matches"
-        subtitle="Offres normalisées et dédupliquées des 5 sources avec scoring Gemini (1 à 10) et analyse détaillée des compétences."
+        subtitle="Offres normalisées et dédupliquées collectées via Apify avec scoring Gemini (1 à 10) et analyse détaillée."
         action={
           <>
             <Button
-              variant="secondary"
               size="sm"
               onClick={syncApify}
               disabled={isDemo || loading || busyAction !== null}
             >
-              <RefreshCw className="h-3.5 w-3.5" />
-              Importer les offres Apify
+              <RefreshCw className={`h-3.5 w-3.5 ${busyAction === 'apify-sync' ? 'animate-spin' : ''}`} />
+              {busyAction === 'apify-sync' ? 'Collecte Apify...' : 'Lancer une recherche Apify'}
             </Button>
             <Button variant="secondary" size="sm" onClick={() => void loadJobs()} disabled={loading}>
               Actualiser
@@ -243,12 +247,13 @@ export default function JobMatchesPage() {
           </div>
 
           <Select value={source} onChange={(e) => setSource(e.target.value)}>
-            <option value="all">Toutes plateformes (5)</option>
-            <option value="france_travail">France Travail</option>
+            <option value="all">Toutes les plateformes</option>
             <option value="welcome_to_the_jungle">Welcome to the Jungle</option>
+            <option value="linkedin">LinkedIn</option>
             <option value="indeed">Indeed</option>
             <option value="hellowork">HelloWork</option>
             <option value="meteojob">Meteojob</option>
+            <option value="other">Autres sources Apify</option>
           </Select>
 
           <Input
