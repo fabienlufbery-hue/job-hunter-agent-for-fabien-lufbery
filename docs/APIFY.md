@@ -1,0 +1,2 @@
+# Apify
+Créez un jeton API dans https://console.apify.com/settings/integrations. Configurez une tâche Apify alimentée par une source autorisée à fournir les offres et planifiez-la. Lancez une première collecte. Dans Vercel, configurez APIFY_API_TOKEN et APIFY_TASK_ID. L'application lit uniquement le dernier dataset réussi, sans lancer d'Actor payant. Ne partagez jamais le jeton. Conservez Gemini, PostgreSQL, AUTH_SECRET et CRON_SECRET. Vérifiez le format de sortie de votre tâche : title/jobTitle, url/jobUrl/originalUrl, company/companyName, description/jobDescription, etc.
