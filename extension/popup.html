@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Job Hunter Agent for Fabien Lufbery</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <header class="header">
+        <div class="brand">
+          <div class="logo">JH</div>
+          <div>
+            <h1>Job Hunter Agent</h1>
+            <p class="subtitle">for Fabien Lufbery · MV3</p>
+          </div>
+        </div>
+        <span id="connBadge" class="badge badge-muted">Vérification...</span>
+      </header>
+
+      <section class="glass-card">
+        <div class="row-between">
+          <span class="label">Plateforme active</span>
+          <strong id="platformName" class="value">—</strong>
+        </div>
+        <div class="row-between">
+          <span class="label">Dernière synchro</span>
+          <span id="lastSync" class="value-muted">Jamais</span>
+        </div>
+        <div class="row-between">
+          <span class="label">Offres importées</span>
+          <strong id="totalImported" class="value-accent">0</strong>
+        </div>
+      </section>
+
+      <div id="alertBox" class="alert hidden"></div>
+
+      <section class="glass-card">
+        <div class="actions">
+          <button id="scanBtn" class="btn btn-secondary">1. Lire la page</button>
+          <button id="syncBtn" class="btn btn-primary" disabled>2. Synchroniser</button>
+        </div>
+        <div id="previewBox" class="preview hidden">
+          <div class="preview-header">
+            <span id="previewCount">0 offre détectée</span>
+          </div>
+          <ul id="previewList" class="preview-list"></ul>
+        </div>
+      </section>
+
+      <details class="glass-card accordion">
+        <summary>Importation assistée (si page protégée / DOM modifié)</summary>
+        <div class="form-grid">
+          <input id="manualTitle" type="text" placeholder="Intitulé du poste *" />
+          <input id="manualCompany" type="text" placeholder="Entreprise" />
+          <input id="manualLocation" type="text" placeholder="Localisation" />
+          <input id="manualContract" type="text" placeholder="Contrat (CDI, Alternance...)" />
+          <textarea id="manualDesc" rows="3" placeholder="Description collée manuellement..."></textarea>
+          <button id="manualSyncBtn" class="btn btn-secondary">Importer cette offre assistée</button>
+        </div>
+      </details>
+
+      <details class="glass-card accordion">
+        <summary>Configuration Backend (Local / Vercel)</summary>
+        <div class="form-grid">
+          <label class="field-label" for="backendPreset">Environnement</label>
+          <select id="backendPreset">
+            <option value="http://localhost:3000">Local (http://localhost:3000)</option>
+            <option value="https://job-hunter-agent-for-fabien-lufbery.vercel.app">
+              Vercel Production
+            </option>
+            <option value="custom">URL personnalisée</option>
+          </select>
+          <input
+            id="backendUrl"
+            type="url"
+            placeholder="https://job-hunter-agent-for-fabien-lufbery.vercel.app"
+          />
+          <label class="field-label" for="ingestToken">Token d'ingestion (X-Extension-Token)</label>
+          <input id="ingestToken" type="password" placeholder="EXTENSION_INGEST_TOKEN" />
+          <button id="saveCfgBtn" class="btn btn-secondary">Enregistrer & Tester</button>
+        </div>
+      </details>
+
+      <footer class="footer">
+        <span>Rappels 09h00 & 18h00 (Europe/Paris) · Aucun cookie transmis</span>
+      </footer>
+    </div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
